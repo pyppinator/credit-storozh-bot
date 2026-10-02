@@ -383,9 +383,5 @@ def create_webhook_app():
 
 if __name__ == "__main__":
     init_db()
-    webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
-    asyncio.run(bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=True))
-    print(f"Webhook установлен: {webhook_url}")
-    
     app = create_webhook_app()
     web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
