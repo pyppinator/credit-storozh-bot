@@ -1,6 +1,5 @@
 import asyncio
 import os
-import subprocess
 import logging
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
@@ -15,11 +14,13 @@ from keyboards import (
 )
 from database import (
     init_db, add_subscription, get_user_subscriptions,
-    get_user_subscriptions_with_id, delete_subscription_by_id, add_request
+    get_user_subscriptions_with_id, delete_subscription_by_id, add_request,
+    check_subscription_exists, get_unique_products, get_subscribers,
+    get_current_rate, update_rate_for_all
 )
 from products import BANKS
+from products_map import PRODUCTS_MAP
 
-# --- Настройки ---
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ADMIN_ID = 232443634
 WEBHOOK_PATH = "/webhook"
@@ -32,24 +33,6 @@ REFINANCE_SELECTOR = "table tr:nth-child(2) td:nth-child(2)"
 
 logging.basicConfig(level=logging.INFO)
 
-# --- Установка Chromium при старте ---
-def install_chromium():
-    """Скачивает Chromium, если его нет"""
-    try:
-        print("Проверяю Chromium...")
-        result = subprocess.run(
-            ["playwright", "install", "chromium"],
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
-        print(f"Результат: {result.stdout}")
-        if result.stderr:
-            print(f"Ошибки: {result.stderr}")
-    except Exception as e:
-        print(f"Ошибка установки Chromium: {e}")
-
-# --- Бот ---
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
@@ -72,6 +55,60 @@ async def get_rate_from_site(url, selector):
             print(f"Ошибка получения ставки: {e}")
             await browser.close()
             return None
+
+# ============ ЕЖЕДНЕВНАЯ ПРОВЕРКА ============
+
+async def daily_check():
+    """Раз в день проверяет все ставки и рассылает уведомления"""
+    while True:
+        try:
+            # Ждём до 12:00 по Минску (9:00 UTC)
+            now = asyncio.get_event_loop().time()
+            # Просто спим 24 часа
+            await asyncio.sleep(24 * 3600)
+
+            print("=== Ежедневная проверка ===")
+            unique = get_unique_products()
+            print(f"Уникальных продуктов: {len(unique)}")
+
+            for bank, product in unique:
+                key = (bank, product)
+                if key not in PRODUCTS_MAP:
+                    print(f"Нет URL для {key}")
+                    continue
+
+                url, selector = PRODUCTS_MAP[key]
+                new_rate = await get_rate_from_site(url, selector)
+                if not new_rate:
+                    print(f"Не удалось получить ставку для {key}")
+                    continue
+
+                old_rate = get_current_rate(bank, product)
+                print(f"{key}: было {old_rate}, стало {new_rate}")
+
+                if old_rate != new_rate:
+                    subscribers = get_subscribers(bank, product)
+                    print(f"Изменение! Подписчиков: {len(subscribers)}")
+                    for user_id in subscribers:
+                        try:
+                            await bot.send_message(
+                                user_id,
+                                f"🔔 <b>Изменение!</b>\n\n"
+                                f"Банк: {bank}\n"
+                                f"Кредит: «{product}»\n\n"
+                                f"Было: <b>{old_rate}</b>\n"
+                                f"Стало: <b>{new_rate}</b>",
+                                parse_mode="HTML"
+                            )
+                        except Exception as e:
+                            print(f"Ошибка отправки {user_id}: {e}")
+                    update_rate_for_all(bank, product, new_rate)
+                    print("База обновлена.")
+        except Exception as e:
+            print(f"Ошибка в daily_check: {e}")
+            await asyncio.sleep(3600)  # при ошибке — подождать час и попробовать снова
+
+# ============ ХЕНДЛЕРЫ БОТА ============
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
@@ -162,6 +199,11 @@ async def product_selected(callback: CallbackQuery):
         await callback.answer("Кредит не найден")
         return
 
+    # === ПРОВЕРКА НА ДУБЛИКАТ ===
+    if check_subscription_exists(callback.from_user.id, bank["name"], product["name"]):
+        await callback.answer("⚠️ Ты уже подписан на этот кредит!", show_alert=True)
+        return
+
     await callback.message.edit_text("⏳ Получаю актуальную ставку...")
     rate = await get_rate_from_site(product["url"], product["selector"]) or "не удалось получить"
 
@@ -217,6 +259,9 @@ async def refinance_handler(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "refinance_subscribe")
 async def refinance_subscribe(callback: CallbackQuery):
+    if check_subscription_exists(callback.from_user.id, "НБРБ", "Ставка рефинансирования"):
+        await callback.answer("⚠️ Ты уже подписан на ставку рефинансирования!", show_alert=True)
+        return
     await callback.message.edit_text("⏳ Получаю актуальную ставку...")
     rate = await get_rate_from_site(REFINANCE_URL, REFINANCE_SELECTOR) or "не удалось получить"
     add_subscription(callback.from_user.id, callback.from_user.username, "НБРБ", "Ставка рефинансирования", rate)
@@ -257,12 +302,16 @@ async def handle_request(message: Message):
         print(f"Ошибка отправки админу: {e}")
     await message.answer("✅ <b>Спасибо! Твоя заявка отправлена.</b>\n\nЯ передал её администратору. Как только добавлю — сообщу.", parse_mode="HTML")
 
-# --- Webhook приложение ---
+# ============ WEBHOOK ============
+
 async def on_startup(app):
     webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
     print(f"Устанавливаю webhook: {webhook_url}")
     await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=True)
     print("Webhook установлен!")
+    # Запускаем ежедневную проверку в фоне
+    asyncio.create_task(daily_check())
+    print("Ежедневная проверка запущена!")
 
 async def on_shutdown(app):
     await bot.delete_webhook()
@@ -286,7 +335,6 @@ def create_webhook_app():
     return app
 
 if __name__ == "__main__":
-    install_chromium()   # ← Скачиваем Chromium при старте!
     init_db()
     app = create_webhook_app()
     web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))

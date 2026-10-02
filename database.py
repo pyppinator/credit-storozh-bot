@@ -29,6 +29,18 @@ def init_db():
     conn.commit()
     conn.close()
 
+def check_subscription_exists(user_id, bank, product):
+    """Проверяет, есть ли уже такая подписка у пользователя"""
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM subscriptions WHERE user_id = ? AND bank = ? AND product = ?",
+        (user_id, bank, product)
+    )
+    count = cur.fetchone()[0]
+    conn.close()
+    return count > 0
+
 def add_subscription(user_id, username, bank, product, rate):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -71,8 +83,6 @@ def add_request(user_id, username, text):
     """, (user_id, username, text, datetime.now().isoformat()))
     conn.commit()
     conn.close()
-
-# ============ НОВЫЕ ФУНКЦИИ ДЛЯ CHECKER ============
 
 def get_unique_products():
     """Возвращает уникальные пары (банк, продукт) из всех подписок"""
