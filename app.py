@@ -189,7 +189,12 @@ async def product_selected(callback: CallbackQuery):
         await callback.answer("⚠️ Ты уже подписан на этот кредит!", show_alert=True)
         return
 
-    await callback.message.edit_text("⏳ Получаю актуальную ставку...")
+    await callback.message.edit_text(
+        "⏳ <b>Получаю актуальную ставку...</b> 🥺\n\n"
+        "⏱️ Это может занять <b>10–20 секунд</b>.\n"
+        "Пожалуйста, подожди немного — я загружаю данные с сайта банка. 🙏",
+        parse_mode="HTML"
+    )
     rate = await get_rate_from_site(product["url"], product["selector"]) or "не удалось получить"
 
     add_subscription(
@@ -232,7 +237,12 @@ async def help_handler(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "refinance")
 async def refinance_handler(callback: CallbackQuery):
-    await callback.message.edit_text("⏳ Получаю актуальную ставку рефинансирования...")
+    await callback.message.edit_text(
+        "⏳ <b>Получаю актуальную ставку рефинансирования...</b> 🥺\n\n"
+        "⏱️ Это может занять <b>10–20 секунд</b>.\n"
+        "Пожалуйста, подожди немного — я загружаю данные с сайта. 🙏",
+        parse_mode="HTML"
+    )
     rate = await get_rate_from_site(REFINANCE_URL, REFINANCE_SELECTOR) or "не удалось получить"
     await callback.message.edit_text(
         f"📊 <b>Ставка рефинансирования НБРБ</b>\n\n"
@@ -247,7 +257,12 @@ async def refinance_subscribe(callback: CallbackQuery):
     if check_subscription_exists(callback.from_user.id, "НБРБ", "Ставка рефинансирования"):
         await callback.answer("⚠️ Ты уже подписан на ставку рефинансирования!", show_alert=True)
         return
-    await callback.message.edit_text("⏳ Получаю актуальную ставку...")
+    await callback.message.edit_text(
+        "⏳ <b>Получаю актуальную ставку...</b> 🥺\n\n"
+        "⏱️ Это может занять <b>10–20 секунд</b>.\n"
+        "Пожалуйста, подожди немного. 🙏",
+        parse_mode="HTML"
+    )
     rate = await get_rate_from_site(REFINANCE_URL, REFINANCE_SELECTOR) or "не удалось получить"
     add_subscription(callback.from_user.id, callback.from_user.username, "НБРБ", "Ставка рефинансирования", rate)
     await callback.message.edit_text(
@@ -348,7 +363,14 @@ async def handle_request(message: Message):
         )
     except Exception as e:
         print(f"Ошибка отправки админу: {e}")
-    await message.answer("✅ <b>Спасибо! Твоя заявка отправлена.</b>\n\nЯ передал её администратору. Как только добавлю — сообщу.", parse_mode="HTML")
+
+    is_admin = (message.from_user.id == ADMIN_ID)
+    await message.answer(
+        "✅ <b>Спасибо! Твоя заявка отправлена.</b>\n\n"
+        "Я передал её администратору. Как только добавлю — сообщу.",
+        reply_markup=main_menu(is_admin=is_admin),
+        parse_mode="HTML"
+    )
 
 # ============ WEBHOOK ============
 

@@ -5,11 +5,9 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Если DATABASE_URL нет — используем SQLite локально
 if not DATABASE_URL:
     DATABASE_URL = "sqlite:///credit_storozh.db"
 
-# Render даёт ссылку с postgres://, SQLAlchemy хочет postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
