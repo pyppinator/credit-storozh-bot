@@ -1,7 +1,6 @@
 import asyncio
 import os
 import logging
-from flask import Flask, request
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
@@ -29,17 +28,6 @@ REFINANCE_URL = "https://www.gb.by/spravochniki/stavka-refinansirovaniya-natsion
 REFINANCE_SELECTOR = "table tr:nth-child(2) td:nth-child(2)"
 
 logging.basicConfig(level=logging.INFO)
-
-# --- Flask ---
-flask_app = Flask(__name__)
-
-@flask_app.route("/")
-def index():
-    return "Bot is running"
-
-@flask_app.route("/health")
-def health():
-    return "OK"
 
 # --- Бот ---
 bot = Bot(token=BOT_TOKEN)
@@ -260,8 +248,14 @@ async def on_startup(app):
 async def on_shutdown(app):
     await bot.delete_webhook()
 
+async def health_check(request):
+    """Health-check для Render"""
+    return web.Response(text="OK")
+
 def create_webhook_app():
     app = web.Application()
+    app.router.add_get("/health", health_check)
+    app.router.add_get("/", health_check)
     webhook_requests_handler = SimpleRequestHandler(
         dispatcher=dp,
         bot=bot,
