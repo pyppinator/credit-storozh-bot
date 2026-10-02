@@ -11,13 +11,14 @@ from playwright.async_api import async_playwright
 from keyboards import (
     main_menu, banks_menu, products_menu,
     subscriptions_menu, unsubscribe_menu, refinance_menu,
-    admin_menu
+    admin_menu, top_products_menu
 )
 from database import (
     init_db, add_subscription, get_user_subscriptions,
     get_user_subscriptions_with_id, delete_subscription_by_id, add_request,
     check_subscription_exists, get_unique_products, get_subscribers,
-    get_current_rate, update_rate_for_all, get_all_subscriptions, get_stats
+    get_current_rate, update_rate_for_all, get_all_subscriptions, get_stats,
+    get_grouped_subscriptions
 )
 from products import BANKS
 from products_map import PRODUCTS_MAP
@@ -192,7 +193,8 @@ async def product_selected(callback: CallbackQuery):
     await callback.message.edit_text(
         "⏳ <b>Получаю актуальную ставку...</b> 🥺\n\n"
         "⏱️ Это может занять <b>10–20 секунд</b>.\n"
-        "Пожалуйста, подожди немного — я загружаю данные с сайта банка. 🙏",
+        "Пожалуйста, подожди немного — я очень стараюсь! 🙏\n\n"
+        "<i>Я загружаю данные с сайта банка, это не быстро. Спасибо за терпение!</i>",
         parse_mode="HTML"
     )
     rate = await get_rate_from_site(product["url"], product["selector"]) or "не удалось получить"
@@ -222,6 +224,7 @@ async def help_handler(callback: CallbackQuery):
         "<b>Что я умею:</b>\n"
         "• 📋 Выбрать банк — подписаться на кредит\n"
         "• 📌 Мои подписки — посмотреть и отписаться\n"
+        "• 🔥 Популярные кредиты — что выбирают другие\n"
         "• 📊 Ставка рефинансирования — следить за НБРБ\n"
         "• 📝 Нет моего банка/кредита — отправить заявку админу\n\n"
         "<b>Как это работает:</b>\n"
@@ -240,7 +243,8 @@ async def refinance_handler(callback: CallbackQuery):
     await callback.message.edit_text(
         "⏳ <b>Получаю актуальную ставку рефинансирования...</b> 🥺\n\n"
         "⏱️ Это может занять <b>10–20 секунд</b>.\n"
-        "Пожалуйста, подожди немного — я загружаю данные с сайта. 🙏",
+        "Пожалуйста, подожди немного — я очень стараюсь! 🙏\n\n"
+        "<i>Я загружаю данные с сайта банка, это не быстро. Спасибо за терпение!</i>",
         parse_mode="HTML"
     )
     rate = await get_rate_from_site(REFINANCE_URL, REFINANCE_SELECTOR) or "не удалось получить"
@@ -260,7 +264,8 @@ async def refinance_subscribe(callback: CallbackQuery):
     await callback.message.edit_text(
         "⏳ <b>Получаю актуальную ставку...</b> 🥺\n\n"
         "⏱️ Это может занять <b>10–20 секунд</b>.\n"
-        "Пожалуйста, подожди немного. 🙏",
+        "Пожалуйста, подожди немного — я очень стараюсь! 🙏\n\n"
+        "<i>Я загружаю данные с сайта банка, это не быстро. Спасибо за терпение!</i>",
         parse_mode="HTML"
     )
     rate = await get_rate_from_site(REFINANCE_URL, REFINANCE_SELECTOR) or "не удалось получить"
@@ -286,6 +291,30 @@ async def no_product(callback: CallbackQuery):
         "📝 <b>Напиши, какой кредит ты хочешь добавить.</b>\n\nНапример: <i>Кредит «На всё про всё» в Технобанке</i>\n\nЯ передам твоё сообщение администратору.",
         parse_mode="HTML"
     )
+
+# ============ ПОПУЛЯРНЫЕ КРЕДИТЫ (для всех) ============
+
+@dp.callback_query(F.data == "top_products")
+async def top_products_handler(callback: CallbackQuery):
+    stats = get_stats()
+    if not stats['top_products']:
+        await callback.message.edit_text(
+            "📊 Пока никто не подписался ни на один кредит.\n\n"
+            "Будь первым! Выбери банк в главном меню.",
+            reply_markup=top_products_menu(),
+            parse_mode="HTML"
+        )
+        return
+
+    text = "🔥 <b>Топ-5 популярных кредитов</b>\n\n"
+    text += "Вот за чем следят другие пользователи:\n\n"
+    for i, (bank, product, cnt) in enumerate(stats['top_products'], 1):
+        text += f"<b>{i}.</b> {bank} — «{product}»\n"
+        text += f"    👥 Следят: <b>{cnt}</b> чел.\n\n"
+    text += f"📌 Всего подписок: <b>{stats['total_subs']}</b>\n"
+    text += f"👥 Пользователей: <b>{stats['total_users']}</b>"
+
+    await callback.message.edit_text(text, reply_markup=top_products_menu(), parse_mode="HTML")
 
 # ============ АДМИН-ПАНЕЛЬ ============
 
@@ -325,21 +354,18 @@ async def admin_subs_callback(callback: CallbackQuery):
             text += f"• {bank}: <b>{cnt}</b>\n"
         text += "\n"
 
-    subs = get_all_subscriptions()
-    if subs:
+    grouped = get_grouped_subscriptions()
+    if grouped:
         text += "━━━━━━━━━━━━━━━━━━━━\n"
-        text += f"📋 <b>Все подписки ({len(subs)}):</b>\n\n"
-        for i, (user_id, username, bank, product, rate, created_at) in enumerate(subs, 1):
-            date = created_at[:16].replace("T", " ") if created_at else "—"
-            user = f"@{username}" if username else f"id{user_id}"
-            text += (
-                f"<b>{i}. {user}</b>\n"
-                f"   🆔 <code>{user_id}</code>\n"
-                f"   🏦 {bank}\n"
-                f"   💳 «{product}»\n"
-                f"   📈 Ставка: <b>{rate}</b>\n"
-                f"   📅 {date}\n\n"
-            )
+        text += f"📋 <b>Подписчики ({len(grouped)} чел.):</b>\n\n"
+        for user_data in grouped:
+            user = f"@{user_data['username']}" if user_data['username'] else f"id{user_data['user_id']}"
+            text += f"👤 <b>{user}</b>\n"
+            text += f"   🆔 <code>{user_data['user_id']}</code>\n"
+            for sub in user_data['subscriptions']:
+                text += f"   • {sub['bank']} — «{sub['product']}»\n"
+                text += f"     📈 {sub['rate']}\n"
+            text += "\n"
 
     if len(text) > 4000:
         parts = [text[i:i+4000] for i in range(0, len(text), 4000)]

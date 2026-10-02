@@ -6,6 +6,7 @@ def main_menu(is_admin=False):
     buttons = [
         [InlineKeyboardButton(text="📋 Выбрать банк", callback_data="choose_bank")],
         [InlineKeyboardButton(text="📌 Мои подписки", callback_data="my_subs")],
+        [InlineKeyboardButton(text="🔥 Популярные кредиты", callback_data="top_products")],
         [InlineKeyboardButton(text="📊 Ставка рефинансирования", callback_data="refinance")],
         [InlineKeyboardButton(text="ℹ️ Помощь", callback_data="help")],
     ]
@@ -57,5 +58,11 @@ def refinance_menu():
 def admin_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика и подписки", callback_data="admin_subs")],
+        [InlineKeyboardButton(text="🏠 В главное меню", callback_data="back_main")],
+    ])
+
+def top_products_menu():
+    """Меню для раздела «Популярные кредиты»"""
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🏠 В главное меню", callback_data="back_main")],
     ])

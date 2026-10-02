@@ -116,6 +116,29 @@ def get_all_subscriptions():
     session.close()
     return rows
 
+def get_grouped_subscriptions():
+    """Возвращает подписки, сгруппированные по пользователям"""
+    session = SessionLocal()
+    rows = session.query(Subscription).order_by(Subscription.user_id, Subscription.created_at).all()
+    session.close()
+
+    grouped = {}
+    for sub in rows:
+        key = sub.user_id
+        if key not in grouped:
+            grouped[key] = {
+                "user_id": sub.user_id,
+                "username": sub.username,
+                "subscriptions": []
+            }
+        grouped[key]["subscriptions"].append({
+            "bank": sub.bank,
+            "product": sub.product,
+            "rate": sub.last_rate,
+            "created_at": sub.created_at
+        })
+    return list(grouped.values())
+
 def get_stats():
     session = SessionLocal()
     total_users = session.query(Subscription.user_id).distinct().count()
