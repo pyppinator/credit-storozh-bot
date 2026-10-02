@@ -1,0 +1,7 @@
+flask
+aiogram
+playwright
+requests
+beautifulsoup4
+sqlalchemy
+aiosqlite
