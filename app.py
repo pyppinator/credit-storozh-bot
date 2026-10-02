@@ -1,10 +1,12 @@
 import asyncio
 import os
-import threading
-from flask import Flask
+import logging
+from flask import Flask, request
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
 from playwright.async_api import async_playwright
 
 from keyboards import (
@@ -17,22 +19,29 @@ from database import (
 )
 from products import BANKS
 
+# --- Настройки ---
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ADMIN_ID = 232443634
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_SECRET = "credit-storozh-secret-2026"
 
 REFINANCE_URL = "https://www.gb.by/spravochniki/stavka-refinansirovaniya-natsionalnogo-b"
 REFINANCE_SELECTOR = "table tr:nth-child(2) td:nth-child(2)"
 
-app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
-@app.route("/")
+# --- Flask ---
+flask_app = Flask(__name__)
+
+@flask_app.route("/")
 def index():
     return "Bot is running"
 
-@app.route("/health")
+@flask_app.route("/health")
 def health():
     return "OK"
 
+# --- Бот ---
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
@@ -107,11 +116,7 @@ async def my_subs(callback: CallbackQuery):
 async def unsubscribe(callback: CallbackQuery):
     subs = get_user_subscriptions_with_id(callback.from_user.id)
     if not subs:
-        await callback.message.edit_text(
-            "😔 <b>У тебя пока нет подписок.</b>",
-            reply_markup=main_menu(),
-            parse_mode="HTML"
-        )
+        await callback.message.edit_text("😔 <b>У тебя пока нет подписок.</b>", reply_markup=main_menu(), parse_mode="HTML")
         return
     await callback.message.edit_text(
         "❌ <b>Выбери, от чего отписаться:</b>",
@@ -123,11 +128,7 @@ async def unsubscribe(callback: CallbackQuery):
 async def do_unsubscribe(callback: CallbackQuery):
     sub_id = int(callback.data.replace("unsub_", ""))
     delete_subscription_by_id(sub_id, callback.from_user.id)
-    await callback.message.edit_text(
-        "✅ <b>Ты отписан!</b>",
-        reply_markup=main_menu(),
-        parse_mode="HTML"
-    )
+    await callback.message.edit_text("✅ <b>Ты отписан!</b>", reply_markup=main_menu(), parse_mode="HTML")
 
 @dp.callback_query(F.data.startswith("bank_"))
 async def bank_selected(callback: CallbackQuery):
@@ -210,13 +211,7 @@ async def refinance_handler(callback: CallbackQuery):
 async def refinance_subscribe(callback: CallbackQuery):
     await callback.message.edit_text("⏳ Получаю актуальную ставку...")
     rate = await get_rate_from_site(REFINANCE_URL, REFINANCE_SELECTOR) or "не удалось получить"
-    add_subscription(
-        callback.from_user.id,
-        callback.from_user.username,
-        "НБРБ",
-        "Ставка рефинансирования",
-        rate
-    )
+    add_subscription(callback.from_user.id, callback.from_user.username, "НБРБ", "Ставка рефинансирования", rate)
     await callback.message.edit_text(
         f"✅ <b>Ты подписан на уведомления об изменении ставки рефинансирования НБРБ.</b>\n\n"
         f"Текущая ставка: <b>{rate}%</b>\n\n"
@@ -228,18 +223,14 @@ async def refinance_subscribe(callback: CallbackQuery):
 @dp.callback_query(F.data == "no_bank")
 async def no_bank(callback: CallbackQuery):
     await callback.message.edit_text(
-        "📝 <b>Напиши, какой банк ты хочешь добавить.</b>\n\n"
-        "Например: <i>Банк Дабрабыт</i>\n\n"
-        "Я передам твоё сообщение администратору.",
+        "📝 <b>Напиши, какой банк ты хочешь добавить.</b>\n\nНапример: <i>Банк Дабрабыт</i>\n\nЯ передам твоё сообщение администратору.",
         parse_mode="HTML"
     )
 
 @dp.callback_query(F.data == "no_product")
 async def no_product(callback: CallbackQuery):
     await callback.message.edit_text(
-        "📝 <b>Напиши, какой кредит ты хочешь добавить.</b>\n\n"
-        "Например: <i>Кредит «На всё про всё» в Технобанке</i>\n\n"
-        "Я передам твоё сообщение администратору.",
+        "📝 <b>Напиши, какой кредит ты хочешь добавить.</b>\n\nНапример: <i>Кредит «На всё про всё» в Технобанке</i>\n\nЯ передам твоё сообщение администратору.",
         parse_mode="HTML"
     )
 
@@ -251,26 +242,38 @@ async def handle_request(message: Message):
     try:
         await bot.send_message(
             ADMIN_ID,
-            f"📩 <b>Новая заявка!</b>\n\n"
-            f"От: @{user.username or 'без username'} (ID: {user.id})\n"
-            f"Текст: <i>{text}</i>",
+            f"📩 <b>Новая заявка!</b>\n\nОт: @{user.username or 'без username'} (ID: {user.id})\nТекст: <i>{text}</i>",
             parse_mode="HTML"
         )
     except Exception as e:
         print(f"Ошибка отправки админу: {e}")
-    await message.answer(
-        "✅ <b>Спасибо! Твоя заявка отправлена.</b>\n\n"
-        "Я передал её администратору. Как только добавлю — сообщу.",
-        parse_mode="HTML"
+    await message.answer("✅ <b>Спасибо! Твоя заявка отправлена.</b>\n\nЯ передал её администратору. Как только добавлю — сообщу.", parse_mode="HTML")
+
+# --- Webhook приложение ---
+async def on_startup(app):
+    await bot.set_webhook(
+        f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}{WEBHOOK_PATH}",
+        secret_token=WEBHOOK_SECRET,
+        drop_pending_updates=True
     )
 
-def run_bot():
-    asyncio.run(dp.start_polling(bot))
+async def on_shutdown(app):
+    await bot.delete_webhook()
 
-bot_thread = threading.Thread(target=run_bot)
-bot_thread.daemon = True
-bot_thread.start()
+def create_webhook_app():
+    app = web.Application()
+    webhook_requests_handler = SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+        secret_token=WEBHOOK_SECRET,
+    )
+    webhook_requests_handler.register(app, path=WEBHOOK_PATH)
+    setup_application(app, dp, bot=bot)
+    app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
+    return app
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app = create_webhook_app()
+    web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
