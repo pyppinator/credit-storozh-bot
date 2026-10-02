@@ -1,5 +1,6 @@
 import asyncio
 import os
+import subprocess
 import logging
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
@@ -24,13 +25,29 @@ ADMIN_ID = 232443634
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "credit-storozh-secret-2026"
 
-# ЖЁСТКО ПРОПИСЫВАЕМ АДРЕС НАШЕГО СЕРВИСА НА RENDER
 RENDER_URL = "https://credit-storozh-bot.onrender.com"
 
 REFINANCE_URL = "https://www.gb.by/spravochniki/stavka-refinansirovaniya-natsionalnogo-b"
 REFINANCE_SELECTOR = "table tr:nth-child(2) td:nth-child(2)"
 
 logging.basicConfig(level=logging.INFO)
+
+# --- Установка Chromium при старте ---
+def install_chromium():
+    """Скачивает Chromium, если его нет"""
+    try:
+        print("Проверяю Chromium...")
+        result = subprocess.run(
+            ["playwright", "install", "chromium"],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        print(f"Результат: {result.stdout}")
+        if result.stderr:
+            print(f"Ошибки: {result.stderr}")
+    except Exception as e:
+        print(f"Ошибка установки Chromium: {e}")
 
 # --- Бот ---
 bot = Bot(token=BOT_TOKEN)
@@ -269,6 +286,7 @@ def create_webhook_app():
     return app
 
 if __name__ == "__main__":
+    install_chromium()   # ← Скачиваем Chromium при старте!
     init_db()
     app = create_webhook_app()
     web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
