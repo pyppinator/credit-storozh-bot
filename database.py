@@ -30,7 +30,6 @@ def init_db():
     conn.close()
 
 def check_subscription_exists(user_id, bank, product):
-    """Проверяет, есть ли уже такая подписка у пользователя"""
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute(
@@ -85,7 +84,6 @@ def add_request(user_id, username, text):
     conn.close()
 
 def get_unique_products():
-    """Возвращает уникальные пары (банк, продукт) из всех подписок"""
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute("SELECT DISTINCT bank, product FROM subscriptions")
@@ -94,7 +92,6 @@ def get_unique_products():
     return rows
 
 def get_subscribers(bank, product):
-    """Возвращает всех user_id, кто подписан на этот банк и продукт"""
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute(
@@ -106,7 +103,6 @@ def get_subscribers(bank, product):
     return [row[0] for row in rows]
 
 def get_current_rate(bank, product):
-    """Возвращает текущую ставку из базы для этой пары"""
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute(
@@ -118,7 +114,6 @@ def get_current_rate(bank, product):
     return row[0] if row else None
 
 def update_rate_for_all(bank, product, new_rate):
-    """Обновляет ставку для ВСЕХ подписчиков этой пары"""
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute(
@@ -127,3 +122,54 @@ def update_rate_for_all(bank, product, new_rate):
     )
     conn.commit()
     conn.close()
+
+def get_all_subscriptions():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT user_id, username, bank, product, last_rate, created_at
+        FROM subscriptions
+        ORDER BY created_at DESC
+    """)
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+def get_stats():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(DISTINCT user_id) FROM subscriptions")
+    total_users = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM subscriptions")
+    total_subs = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT bank, product, COUNT(*) as cnt
+        FROM subscriptions
+        GROUP BY bank, product
+        ORDER BY cnt DESC
+        LIMIT 5
+    """)
+    top_products = cur.fetchall()
+
+    cur.execute("""
+        SELECT bank, COUNT(*) as cnt
+        FROM subscriptions
+        GROUP BY bank
+        ORDER BY cnt DESC
+    """)
+    bank_stats = cur.fetchall()
+
+    cur.execute("SELECT MAX(created_at) FROM subscriptions")
+    last_sub = cur.fetchone()[0]
+
+    conn.close()
+    return {
+        "total_users": total_users,
+        "total_subs": total_subs,
+        "top_products": top_products,
+        "bank_stats": bank_stats,
+        "last_sub": last_sub
+    }

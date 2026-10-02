@@ -1,13 +1,17 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from products import BANKS
 
-def main_menu():
-    return InlineKeyboardMarkup(inline_keyboard=[
+def main_menu(is_admin=False):
+    """Главное меню. Если is_admin=True — добавляет админ-кнопку."""
+    buttons = [
         [InlineKeyboardButton(text="📋 Выбрать банк", callback_data="choose_bank")],
         [InlineKeyboardButton(text="📌 Мои подписки", callback_data="my_subs")],
         [InlineKeyboardButton(text="📊 Ставка рефинансирования", callback_data="refinance")],
         [InlineKeyboardButton(text="ℹ️ Помощь", callback_data="help")],
-    ])
+    ]
+    if is_admin:
+        buttons.append([InlineKeyboardButton(text="🔐 Админ-панель", callback_data="admin_panel")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def banks_menu():
     buttons = []
@@ -47,5 +51,11 @@ def unsubscribe_menu(subs_with_id):
 def refinance_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔔 Следить за изменениями", callback_data="refinance_subscribe")],
+        [InlineKeyboardButton(text="🏠 В главное меню", callback_data="back_main")],
+    ])
+
+def admin_menu():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика и подписки", callback_data="admin_subs")],
         [InlineKeyboardButton(text="🏠 В главное меню", callback_data="back_main")],
     ])

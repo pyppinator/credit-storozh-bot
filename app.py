@@ -10,13 +10,14 @@ from playwright.async_api import async_playwright
 
 from keyboards import (
     main_menu, banks_menu, products_menu,
-    subscriptions_menu, unsubscribe_menu, refinance_menu
+    subscriptions_menu, unsubscribe_menu, refinance_menu,
+    admin_menu
 )
 from database import (
     init_db, add_subscription, get_user_subscriptions,
     get_user_subscriptions_with_id, delete_subscription_by_id, add_request,
     check_subscription_exists, get_unique_products, get_subscribers,
-    get_current_rate, update_rate_for_all
+    get_current_rate, update_rate_for_all, get_all_subscriptions, get_stats
 )
 from products import BANKS
 from products_map import PRODUCTS_MAP
@@ -35,6 +36,8 @@ logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+
+# ============ ПОЛУЧЕНИЕ СТАВКИ ============
 
 async def get_rate_from_site(url, selector):
     async with async_playwright() as p:
@@ -59,36 +62,22 @@ async def get_rate_from_site(url, selector):
 # ============ ЕЖЕДНЕВНАЯ ПРОВЕРКА ============
 
 async def daily_check():
-    """Раз в день проверяет все ставки и рассылает уведомления"""
     while True:
         try:
-            # Ждём до 12:00 по Минску (9:00 UTC)
-            now = asyncio.get_event_loop().time()
-            # Просто спим 24 часа
             await asyncio.sleep(24 * 3600)
-
             print("=== Ежедневная проверка ===")
             unique = get_unique_products()
-            print(f"Уникальных продуктов: {len(unique)}")
-
             for bank, product in unique:
                 key = (bank, product)
                 if key not in PRODUCTS_MAP:
-                    print(f"Нет URL для {key}")
                     continue
-
                 url, selector = PRODUCTS_MAP[key]
                 new_rate = await get_rate_from_site(url, selector)
                 if not new_rate:
-                    print(f"Не удалось получить ставку для {key}")
                     continue
-
                 old_rate = get_current_rate(bank, product)
-                print(f"{key}: было {old_rate}, стало {new_rate}")
-
                 if old_rate != new_rate:
                     subscribers = get_subscribers(bank, product)
-                    print(f"Изменение! Подписчиков: {len(subscribers)}")
                     for user_id in subscribers:
                         try:
                             await bot.send_message(
@@ -103,20 +92,20 @@ async def daily_check():
                         except Exception as e:
                             print(f"Ошибка отправки {user_id}: {e}")
                     update_rate_for_all(bank, product, new_rate)
-                    print("База обновлена.")
         except Exception as e:
             print(f"Ошибка в daily_check: {e}")
-            await asyncio.sleep(3600)  # при ошибке — подождать час и попробовать снова
+            await asyncio.sleep(3600)
 
-# ============ ХЕНДЛЕРЫ БОТА ============
+# ============ ХЕНДЛЕРЫ ============
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
+    is_admin = (message.from_user.id == ADMIN_ID)
     await message.answer(
         "👋 <b>Привет! Я — Кредитный Сторож.</b> 🏦\n\n"
         "Я слежу за ставками по кредитам в банках РБ.\n\n"
         "Выбери действие:",
-        reply_markup=main_menu(),
+        reply_markup=main_menu(is_admin=is_admin),
         parse_mode="HTML"
     )
 
@@ -130,10 +119,11 @@ async def choose_bank(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "back_main")
 async def back_main(callback: CallbackQuery):
+    is_admin = (callback.from_user.id == ADMIN_ID)
     await callback.message.edit_text(
         "👋 <b>Привет! Я — Кредитный Сторож.</b> 🏦\n\n"
         "Выбери действие:",
-        reply_markup=main_menu(),
+        reply_markup=main_menu(is_admin=is_admin),
         parse_mode="HTML"
     )
 
@@ -151,11 +141,7 @@ async def my_subs(callback: CallbackQuery):
         text = "📌 <b>Твои подписки:</b> 😊\n\n"
         for i, (bank, product, rate) in enumerate(subs, 1):
             text += f"{i}. {bank} — «{product}» ({rate})\n"
-        await callback.message.edit_text(
-            text,
-            reply_markup=subscriptions_menu(),
-            parse_mode="HTML"
-        )
+        await callback.message.edit_text(text, reply_markup=subscriptions_menu(), parse_mode="HTML")
 
 @dp.callback_query(F.data == "unsubscribe")
 async def unsubscribe(callback: CallbackQuery):
@@ -199,7 +185,6 @@ async def product_selected(callback: CallbackQuery):
         await callback.answer("Кредит не найден")
         return
 
-    # === ПРОВЕРКА НА ДУБЛИКАТ ===
     if check_subscription_exists(callback.from_user.id, bank["name"], product["name"]):
         await callback.answer("⚠️ Ты уже подписан на этот кредит!", show_alert=True)
         return
@@ -287,6 +272,69 @@ async def no_product(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
+# ============ АДМИН-ПАНЕЛЬ ============
+
+@dp.callback_query(F.data == "admin_panel")
+async def admin_panel(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "🔐 <b>Админ-панель</b>\n\n"
+        "Здесь ты можешь посмотреть статистику и всех подписчиков.",
+        reply_markup=admin_menu(),
+        parse_mode="HTML"
+    )
+
+@dp.callback_query(F.data == "admin_subs")
+async def admin_subs_callback(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    stats = get_stats()
+    text = "📊 <b>Статистика Кредитного Сторожа</b>\n\n"
+    text += f"👥 Уникальных пользователей: <b>{stats['total_users']}</b>\n"
+    text += f"📌 Всего подписок: <b>{stats['total_subs']}</b>\n"
+    text += f"🕐 Последняя подписка: <b>{stats['last_sub'][:16].replace('T', ' ') if stats['last_sub'] else '—'}</b>\n\n"
+
+    if stats['top_products']:
+        text += "🔥 <b>Топ-5 популярных кредитов:</b>\n"
+        for i, (bank, product, cnt) in enumerate(stats['top_products'], 1):
+            text += f"{i}. {bank} — «{product}» — <b>{cnt}</b> подп.\n"
+        text += "\n"
+
+    if stats['bank_stats']:
+        text += "🏦 <b>Подписки по банкам:</b>\n"
+        for bank, cnt in stats['bank_stats']:
+            text += f"• {bank}: <b>{cnt}</b>\n"
+        text += "\n"
+
+    subs = get_all_subscriptions()
+    if subs:
+        text += "━━━━━━━━━━━━━━━━━━━━\n"
+        text += f"📋 <b>Все подписки ({len(subs)}):</b>\n\n"
+        for i, (user_id, username, bank, product, rate, created_at) in enumerate(subs, 1):
+            date = created_at[:16].replace("T", " ") if created_at else "—"
+            user = f"@{username}" if username else f"id{user_id}"
+            text += (
+                f"<b>{i}. {user}</b>\n"
+                f"   🆔 <code>{user_id}</code>\n"
+                f"   🏦 {bank}\n"
+                f"   💳 «{product}»\n"
+                f"   📈 Ставка: <b>{rate}</b>\n"
+                f"   📅 {date}\n\n"
+            )
+
+    if len(text) > 4000:
+        parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
+        for part in parts:
+            await callback.message.answer(part, parse_mode="HTML")
+    else:
+        await callback.message.edit_text(text, reply_markup=main_menu(is_admin=True), parse_mode="HTML")
+
+# ============ ЗАЯВКИ ============
+
 @dp.message()
 async def handle_request(message: Message):
     user = message.from_user
@@ -309,7 +357,6 @@ async def on_startup(app):
     print(f"Устанавливаю webhook: {webhook_url}")
     await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=True)
     print("Webhook установлен!")
-    # Запускаем ежедневную проверку в фоне
     asyncio.create_task(daily_check())
     print("Ежедневная проверка запущена!")
 
@@ -336,5 +383,9 @@ def create_webhook_app():
 
 if __name__ == "__main__":
     init_db()
+    webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
+    asyncio.run(bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=True))
+    print(f"Webhook установлен: {webhook_url}")
+    
     app = create_webhook_app()
     web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
