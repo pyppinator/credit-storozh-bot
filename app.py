@@ -36,24 +36,11 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# ============ ПОЛУЧЕНИЕ СТАВКИ С САЙТА ============
-
 async def get_rate_from_site(url, selector):
-    """Заходит на сайт через Playwright и читает ставку"""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         await page.set_extra_http_headers({"Accept-Language": "ru-RU,ru;q=0.9"})
-
-        # Блокируем всё лишнее: картинки, стили, шрифты, медиа
-        async def block_requests(route):
-            if route.request.resource_type in ["image", "stylesheet", "font", "media"]:
-                await route.abort()
-            else:
-                await route.continue_()
-
-        await page.route("**/*", block_requests)
-
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
             await page.wait_for_selector(selector, timeout=15000)
@@ -75,6 +62,9 @@ async def daily_check():
     """Раз в день проверяет все ставки и рассылает уведомления"""
     while True:
         try:
+            # Ждём до 12:00 по Минску (9:00 UTC)
+            now = asyncio.get_event_loop().time()
+            # Просто спим 24 часа
             await asyncio.sleep(24 * 3600)
 
             print("=== Ежедневная проверка ===")
@@ -116,7 +106,7 @@ async def daily_check():
                     print("База обновлена.")
         except Exception as e:
             print(f"Ошибка в daily_check: {e}")
-            await asyncio.sleep(3600)
+            await asyncio.sleep(3600)  # при ошибке — подождать час и попробовать снова
 
 # ============ ХЕНДЛЕРЫ БОТА ============
 
@@ -209,6 +199,7 @@ async def product_selected(callback: CallbackQuery):
         await callback.answer("Кредит не найден")
         return
 
+    # === ПРОВЕРКА НА ДУБЛИКАТ ===
     if check_subscription_exists(callback.from_user.id, bank["name"], product["name"]):
         await callback.answer("⚠️ Ты уже подписан на этот кредит!", show_alert=True)
         return
@@ -318,6 +309,7 @@ async def on_startup(app):
     print(f"Устанавливаю webhook: {webhook_url}")
     await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=True)
     print("Webhook установлен!")
+    # Запускаем ежедневную проверку в фоне
     asyncio.create_task(daily_check())
     print("Ежедневная проверка запущена!")
 
