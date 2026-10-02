@@ -24,6 +24,9 @@ ADMIN_ID = 232443634
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "credit-storozh-secret-2026"
 
+# ЖЁСТКО ПРОПИСЫВАЕМ АДРЕС НАШЕГО СЕРВИСА НА RENDER
+RENDER_URL = "https://credit-storozh-bot.onrender.com"
+
 REFINANCE_URL = "https://www.gb.by/spravochniki/stavka-refinansirovaniya-natsionalnogo-b"
 REFINANCE_SELECTOR = "table tr:nth-child(2) td:nth-child(2)"
 
@@ -239,17 +242,15 @@ async def handle_request(message: Message):
 
 # --- Webhook приложение ---
 async def on_startup(app):
-    await bot.set_webhook(
-        f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}{WEBHOOK_PATH}",
-        secret_token=WEBHOOK_SECRET,
-        drop_pending_updates=True
-    )
+    webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
+    print(f"Устанавливаю webhook: {webhook_url}")
+    await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=True)
+    print("Webhook установлен!")
 
 async def on_shutdown(app):
     await bot.delete_webhook()
 
 async def health_check(request):
-    """Health-check для Render"""
     return web.Response(text="OK")
 
 def create_webhook_app():
