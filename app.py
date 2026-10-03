@@ -38,7 +38,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# ============ ПОЛУЧЕНИЕ СТАВКИ (С ОТЛАДКОЙ) ============
+# ============ ПОЛУЧЕНИЕ СТАВКИ ============
 
 async def get_rate_from_site(url, selector, action=None):
     async with async_playwright() as p:
@@ -70,31 +70,30 @@ async def get_rate_from_site(url, selector, action=None):
                     await page.select_option("select#iscredit", value="094")
                 elif action == "select_vozvedenie_095":
                     await page.select_option("select#iscredit", value="095")
-                await page.wait_for_timeout(5000)
+                await page.wait_for_timeout(3000)
                 print(f"[DEBUG] Action выполнен")
 
-            element = await page.query_selector(selector)
-            if not element:
-                print(f"[DEBUG] Элемент {selector} НЕ НАЙДЕН")
-                content = await page.content()
-                print(f"[DEBUG] Длина HTML: {len(content)}")
-                print(f"[DEBUG] Есть 'stavka' в HTML: {'stavka' in content}")
-                print(f"[DEBUG] Есть 'iscredit' в HTML: {'iscredit' in content}")
-                await browser.close()
-                return None
-
-            print(f"[DEBUG] Элемент найден")
-            tag = await element.evaluate("el => el.tagName.toLowerCase()")
-            if tag == "input":
-                value = await element.input_value()
+            # === ЛОГИКА ДЛЯ INPUT (Беларусбанк) ===
+            if selector.startswith("input#"):
+                print(f"[DEBUG] Читаю INPUT через evaluate")
+                await page.wait_for_timeout(1000)
+                value = await page.evaluate(f"document.querySelector('{selector}')?.value")
                 print(f"[DEBUG] input.value = {value}")
-            else:
-                value = await element.inner_text()
-                value = value.strip()
-                print(f"[DEBUG] inner_text = {value}")
+                await browser.close()
+                return value if value else None
 
+            # === ЛОГИКА ДЛЯ ОБЫЧНЫХ ЭЛЕМЕНТОВ (Технобанк) ===
+            print(f"[DEBUG] Читаю элементы через query_selector_all")
+            await page.wait_for_selector(selector, timeout=15000)
+            elements = await page.query_selector_all(selector)
+            values = []
+            for el in elements:
+                text = await el.inner_text()
+                values.append(text.strip())
+            print(f"[DEBUG] Найдено элементов: {len(values)}")
             await browser.close()
-            return value
+            return ", ".join(values) if values else None
+
         except Exception as e:
             print(f"[DEBUG] ОШИБКА: {type(e).__name__}: {e}")
             await browser.close()
@@ -111,12 +110,10 @@ async def daily_check():
             for bank, product in unique:
                 key = (bank, product)
                 if key not in PRODUCTS_MAP:
-                    print(f"Нет URL для {key}")
                     continue
                 url, selector, action = PRODUCTS_MAP[key]
                 new_rate = await get_rate_from_site(url, selector, action)
                 if not new_rate:
-                    print(f"Не удалось получить ставку для {key}")
                     continue
                 old_rate = get_current_rate(bank, product)
                 if old_rate != new_rate:
@@ -245,9 +242,7 @@ async def product_selected(callback: CallbackQuery):
         await callback.answer("Ошибка")
         return
 
-    # Ищем продукт: сначала в группах, потом в обычных продуктах
     product = None
-
     if "groups" in bank:
         group_id = parts[2]
         prod_id = "_".join(parts[3:])
