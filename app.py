@@ -6,7 +6,6 @@ from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
-from playwright.async_api import async_playwright
 
 from keyboards import (
     main_menu, banks_menu, products_menu, groups_menu, group_products_menu,
@@ -16,12 +15,13 @@ from keyboards import (
 from database import (
     init_db, add_subscription, get_user_subscriptions,
     get_user_subscriptions_with_id, delete_subscription_by_id, add_request,
-    check_subscription_exists, get_unique_products, get_subscribers,
-    get_current_rate, update_rate_for_all, get_all_subscriptions, get_stats,
+    check_subscription_exists, get_current_rate, get_all_subscriptions, get_stats,
     get_grouped_subscriptions
 )
 from products import BANKS
 from products_map import PRODUCTS_MAP
+from scraper import get_rate_from_site
+from checker import daily_check
 
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ADMIN_ID = 232443634
@@ -37,111 +37,6 @@ logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-
-# ============ ПОЛУЧЕНИЕ СТАВКИ ============
-
-async def get_rate_from_site(url, selector, action=None):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.set_extra_http_headers({"Accept-Language": "ru-RU,ru;q=0.9"})
-        try:
-            print(f"[DEBUG] Открываю {url}")
-            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(2000)
-
-            if action:
-                action_map = {
-                    "select_ipoteka_24": ("111", None),
-                    "select_ipoteka_12": ("112", "21"),
-                    "select_ipoteka_12_gos": ("112", "23"),
-                    "select_vozvedenie_092": ("092", None),
-                    "select_vozvedenie_091": ("091", None),
-                    "select_vozvedenie_093": ("093", None),
-                    "select_vozvedenie_094": ("094", None),
-                    "select_vozvedenie_095": ("095", None),
-                }
-                value, sposob = action_map.get(action, (None, None))
-
-                if value:
-                    await page.evaluate(f"""
-                        () => {{
-                            const sel = document.querySelector('select#iscredit');
-                            if (sel) {{
-                                sel.value = '{value}';
-                                sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                            }}
-                        }}
-                    """)
-                    await page.wait_for_timeout(2000)
-
-                if sposob:
-                    await page.evaluate(f"""
-                        () => {{
-                            const radio = document.querySelector('input[name="SPOSOB"][value="{sposob}"]');
-                            if (radio) {{
-                                radio.checked = true;
-                                radio.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                            }}
-                        }}
-                    """)
-                    await page.wait_for_timeout(2000)
-
-            if selector.startswith("input#"):
-                value = await page.evaluate(f"document.querySelector('{selector}')?.value")
-                await browser.close()
-                return value if value else None
-
-            await page.wait_for_selector(selector, timeout=15000)
-            elements = await page.query_selector_all(selector)
-            values = []
-            for el in elements:
-                text = await el.inner_text()
-                values.append(text.strip())
-            await browser.close()
-            return ", ".join(values) if values else None
-
-        except Exception as e:
-            print(f"[DEBUG] ОШИБКА: {type(e).__name__}: {e}")
-            await browser.close()
-            return None
-
-# ============ ЕЖЕДНЕВНАЯ ПРОВЕРКА ============
-
-async def daily_check():
-    while True:
-        try:
-            await asyncio.sleep(24 * 3600)
-            print("=== Ежедневная проверка ===")
-            unique = get_unique_products()
-            for bank, product in unique:
-                key = (bank, product)
-                if key not in PRODUCTS_MAP:
-                    continue
-                url, selector, action = PRODUCTS_MAP[key]
-                new_rate = await get_rate_from_site(url, selector, action)
-                if not new_rate:
-                    continue
-                old_rate = get_current_rate(bank, product)
-                if old_rate != new_rate:
-                    subscribers = get_subscribers(bank, product)
-                    for user_id in subscribers:
-                        try:
-                            await bot.send_message(
-                                user_id,
-                                f"🔔 <b>Изменение!</b>\n\n"
-                                f"Банк: {bank}\n"
-                                f"Кредит: «{product}»\n\n"
-                                f"Было: <b>{old_rate}</b>\n"
-                                f"Стало: <b>{new_rate}</b>",
-                                parse_mode="HTML"
-                            )
-                        except Exception as e:
-                            print(f"Ошибка отправки {user_id}: {e}")
-                    update_rate_for_all(bank, product, new_rate)
-        except Exception as e:
-            print(f"Ошибка в daily_check: {e}")
-            await asyncio.sleep(3600)
 
 # ============ ХЕНДЛЕРЫ ============
 
@@ -484,7 +379,7 @@ async def on_startup(app):
     print(f"Устанавливаю webhook: {webhook_url}")
     await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=True)
     print("Webhook установлен!")
-    asyncio.create_task(daily_check())
+    asyncio.create_task(daily_check(bot))
     print("Ежедневная проверка запущена!")
 
 async def on_shutdown(app):
