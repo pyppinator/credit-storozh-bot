@@ -33,8 +33,18 @@ class Request(Base):
     text = Column(Text, nullable=False)
     created_at = Column(String(50))
 
+class Rate(Base):
+    __tablename__ = "rates"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    bank = Column(String(255), nullable=False)
+    product = Column(String(255), nullable=False)
+    rate = Column(Text)
+    updated_at = Column(String(50))
+
 def init_db():
     Base.metadata.create_all(engine)
+
+# === ПОДПИСКИ ===
 
 def check_subscription_exists(user_id, bank, product):
     session = SessionLocal()
@@ -76,12 +86,64 @@ def delete_subscription_by_id(sub_id, user_id):
     session.close()
 
 def delete_all_user_subscriptions(user_id):
-    """Удаляет ВСЕ подписки пользователя"""
     session = SessionLocal()
     count = session.query(Subscription).filter_by(user_id=user_id).delete()
     session.commit()
     session.close()
     return count
+
+def get_subscribers(bank, product):
+    session = SessionLocal()
+    rows = session.query(Subscription.user_id).filter_by(bank=bank, product=product).distinct().all()
+    session.close()
+    return [r[0] for r in rows]
+
+def update_rate_for_all(bank, product, new_rate):
+    session = SessionLocal()
+    session.query(Subscription).filter_by(bank=bank, product=product).update({"last_rate": new_rate})
+    session.commit()
+    session.close()
+
+# === СТАВКИ (НОВАЯ ТАБЛИЦА) ===
+
+def get_rate_from_db(bank, product):
+    """Читает актуальную ставку из БД"""
+    session = SessionLocal()
+    row = session.query(Rate.rate).filter_by(bank=bank, product=product).first()
+    session.close()
+    return row[0] if row else None
+
+def update_rate_in_db(bank, product, rate):
+    """Обновляет ставку в БД (создаёт, если нет)"""
+    session = SessionLocal()
+    existing = session.query(Rate).filter_by(bank=bank, product=product).first()
+    if existing:
+        existing.rate = rate
+        existing.updated_at = datetime.now().isoformat()
+    else:
+        new_rate = Rate(
+            bank=bank, product=product,
+            rate=rate, updated_at=datetime.now().isoformat()
+        )
+        session.add(new_rate)
+    session.commit()
+    session.close()
+
+def get_all_rates():
+    """Все ставки из БД"""
+    session = SessionLocal()
+    rows = session.query(Rate.bank, Rate.product, Rate.rate, Rate.updated_at).all()
+    session.close()
+    return rows
+
+def get_last_update_time():
+    """Когда последний раз обновлялись ставки"""
+    session = SessionLocal()
+    row = session.query(func.max(Rate.updated_at)).scalar()
+    session.close()
+    return row
+
+# === ЗАЯВКИ ===
 
 def add_request(user_id, username, text):
     session = SessionLocal()
@@ -90,29 +152,13 @@ def add_request(user_id, username, text):
     session.commit()
     session.close()
 
+# === СТАТИСТИКА ===
+
 def get_unique_products():
     session = SessionLocal()
     rows = session.query(Subscription.bank, Subscription.product).distinct().all()
     session.close()
     return rows
-
-def get_subscribers(bank, product):
-    session = SessionLocal()
-    rows = session.query(Subscription.user_id).filter_by(bank=bank, product=product).distinct().all()
-    session.close()
-    return [r[0] for r in rows]
-
-def get_current_rate(bank, product):
-    session = SessionLocal()
-    row = session.query(Subscription.last_rate).filter_by(bank=bank, product=product).first()
-    session.close()
-    return row[0] if row else None
-
-def update_rate_for_all(bank, product, new_rate):
-    session = SessionLocal()
-    session.query(Subscription).filter_by(bank=bank, product=product).update({"last_rate": new_rate})
-    session.commit()
-    session.close()
 
 def get_all_subscriptions():
     session = SessionLocal()

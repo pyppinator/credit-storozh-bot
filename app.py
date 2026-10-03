@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 import logging
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
@@ -15,13 +16,12 @@ from keyboards import (
 from database import (
     init_db, add_subscription, get_user_subscriptions,
     get_user_subscriptions_with_id, delete_subscription_by_id, add_request,
-    check_subscription_exists, get_current_rate, get_all_subscriptions, get_stats,
-    get_grouped_subscriptions, delete_all_user_subscriptions
+    check_subscription_exists, get_rate_from_db, get_all_subscriptions, get_stats,
+    get_grouped_subscriptions, delete_all_user_subscriptions, get_last_update_time
 )
 from products import BANKS
 from products_map import PRODUCTS_MAP
 from scraper import get_rate_from_site
-from checker import daily_check
 
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ADMIN_ID = 232443634
@@ -219,14 +219,8 @@ async def product_selected(callback: CallbackQuery):
         await callback.answer("⚠️ Ты уже подписан на этот кредит!", show_alert=True)
         return
 
-    await callback.message.edit_text(
-        "⏳ <b>Получаю актуальную ставку...</b> 🥺\n\n"
-        "⏱️ Это может занять <b>10–20 секунд</b>.\n"
-        "Пожалуйста, подожди немного — я очень стараюсь! 🙏\n\n"
-        "<i>Я загружаю данные с сайта банка, это не быстро. Спасибо за терпение!</i>",
-        parse_mode="HTML"
-    )
-    rate = await get_rate_from_site(product["url"], product["selector"], product.get("action")) or "не удалось получить"
+    # ЧИТАЕМ ИЗ БД — МГНОВЕННО!
+    rate = get_rate_from_db(bank["name"], product["name"]) or "загружается..."
 
     add_subscription(
         callback.from_user.id,
@@ -270,17 +264,10 @@ async def help_handler(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "refinance")
 async def refinance_handler(callback: CallbackQuery):
-    await callback.message.edit_text(
-        "⏳ <b>Получаю актуальную ставку рефинансирования...</b> 🥺\n\n"
-        "⏱️ Это может занять <b>10–20 секунд</b>.\n"
-        "Пожалуйста, подожди немного — я очень стараюсь! 🙏\n\n"
-        "<i>Я загружаю данные с сайта банка, это не быстро. Спасибо за терпение!</i>",
-        parse_mode="HTML"
-    )
-    rate = await get_rate_from_site(REFINANCE_URL, REFINANCE_SELECTOR) or "не удалось получить"
+    rate = get_rate_from_db("НБРБ", "Ставка рефинансирования") or "загружается..."
     await callback.message.edit_text(
         f"📊 <b>Ставка рефинансирования НБРБ</b>\n\n"
-        f"Текущее значение: <b>{rate}%</b>\n\n"
+        f"Текущее значение: <b>{rate}</b>\n\n"
         f"Этот показатель важен для многих кредитов — если он изменится, я сообщу.",
         reply_markup=refinance_menu(),
         parse_mode="HTML"
@@ -291,18 +278,11 @@ async def refinance_subscribe(callback: CallbackQuery):
     if check_subscription_exists(callback.from_user.id, "НБРБ", "Ставка рефинансирования"):
         await callback.answer("⚠️ Ты уже подписан на ставку рефинансирования!", show_alert=True)
         return
-    await callback.message.edit_text(
-        "⏳ <b>Получаю актуальную ставку...</b> 🥺\n\n"
-        "⏱️ Это может занять <b>10–20 секунд</b>.\n"
-        "Пожалуйста, подожди немного — я очень стараюсь! 🙏\n\n"
-        "<i>Я загружаю данные с сайта банка, это не быстро. Спасибо за терпение!</i>",
-        parse_mode="HTML"
-    )
-    rate = await get_rate_from_site(REFINANCE_URL, REFINANCE_SELECTOR) or "не удалось получить"
+    rate = get_rate_from_db("НБРБ", "Ставка рефинансирования") or "загружается..."
     add_subscription(callback.from_user.id, callback.from_user.username, "НБРБ", "Ставка рефинансирования", rate)
     await callback.message.edit_text(
         f"✅ <b>Ты подписан на уведомления об изменении ставки рефинансирования НБРБ.</b>\n\n"
-        f"Текущая ставка: <b>{rate}%</b>\n\n"
+        f"Текущая ставка: <b>{rate}</b>\n\n"
         f"Если ставка изменится, я сообщу.",
         reply_markup=main_menu(),
         parse_mode="HTML"
@@ -337,7 +317,6 @@ async def top_products_handler(callback: CallbackQuery):
         return
 
     text = "🔥 <b>Топ-5 популярных кредитов</b>\n\n"
-    text += "Вот за чем следят другие пользователи:\n\n"
     for i, (bank, product, cnt) in enumerate(stats['top_products'], 1):
         text += f"<b>{i}.</b> {bank} — «{product}»\n"
         text += f"    👥 Следят: <b>{cnt}</b> чел.\n\n"
@@ -353,12 +332,48 @@ async def admin_panel(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
+    last_update = get_last_update_time() or "никогда"
     await callback.message.edit_text(
-        "🔐 <b>Админ-панель</b>\n\n"
-        "Здесь ты можешь посмотреть статистику и всех подписчиков.",
+        f"🔐 <b>Админ-панель</b>\n\n"
+        f"🕐 Последнее обновление ставок: <b>{last_update[:16].replace('T', ' ') if last_update != 'никогда' else 'никогда'}</b>",
         reply_markup=admin_menu(),
         parse_mode="HTML"
     )
+
+@dp.callback_query(F.data == "admin_update_rates")
+async def admin_update_rates(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "📥 <b>Запускаю обновление ставок...</b>\n\n"
+        "Это может занять 5–15 минут. Я сообщу, когда закончу.",
+        parse_mode="HTML"
+    )
+    try:
+        from updater import update_all_rates
+        await update_all_rates()
+        await callback.message.answer(
+            "✅ <b>Обновление завершено!</b>\n\n"
+            "Проверь статистику.",
+            reply_markup=admin_menu(),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        await callback.message.answer(f"❌ Ошибка: {e}")
+
+@dp.callback_query(F.data == "admin_restart")
+async def admin_restart(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "🔄 <b>Перезапускаю бота...</b>\n\n"
+        "Через 10–20 секунд я снова буду в сети.",
+        parse_mode="HTML"
+    )
+    # Перезапуск процесса
+    os.execv(sys.executable, [sys.executable] + sys.argv)
 
 @dp.callback_query(F.data == "admin_unsub_all")
 async def admin_unsub_all(callback: CallbackQuery):
@@ -368,8 +383,7 @@ async def admin_unsub_all(callback: CallbackQuery):
     count = delete_all_user_subscriptions(callback.from_user.id)
     await callback.message.edit_text(
         f"✅ <b>Ты отписан от всех подписок!</b>\n\n"
-        f"Удалено: <b>{count}</b> шт.\n\n"
-        f"Теперь можно тестировать заново.",
+        f"Удалено: <b>{count}</b> шт.",
         reply_markup=main_menu(is_admin=True),
         parse_mode="HTML"
     )
@@ -449,8 +463,6 @@ async def on_startup(app):
     print(f"Устанавливаю webhook: {webhook_url}")
     await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=True)
     print("Webhook установлен!")
-    asyncio.create_task(daily_check(bot))
-    print("Ежедневная проверка запущена!")
 
 async def on_shutdown(app):
     await bot.delete_webhook()

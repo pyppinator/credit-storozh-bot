@@ -1,0 +1,24 @@
+name: Update Rates
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # 3:00 по Минску (0:00 UTC)
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install playwright requests beautifulsoup4 sqlalchemy psycopg[binary] aiogram
+          playwright install chromium
+      - name: Run updater
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        run: python updater.py
