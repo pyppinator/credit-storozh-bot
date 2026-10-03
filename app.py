@@ -51,11 +51,9 @@ async def get_rate_from_site(url, selector, action=None):
             await page.wait_for_timeout(2000)
             print(f"[DEBUG] Страница загружена")
 
-            # === БЕЛАРУСБАНК: принудительно выбираем опцию через JS ===
             if action:
                 print(f"[DEBUG] Выполняю action: {action}")
 
-                # Определяем value и SPOSOB для каждого действия
                 action_map = {
                     "select_ipoteka_24": ("111", None),
                     "select_ipoteka_12": ("112", "21"),
@@ -68,8 +66,8 @@ async def get_rate_from_site(url, selector, action=None):
                 }
                 value, sposob = action_map.get(action, (None, None))
 
+                # ШАГ 1: Выбираем вариант кредита
                 if value:
-                    # Принудительно выбираем опцию в скрытом select и вызываем change
                     await page.evaluate(f"""
                         () => {{
                             const sel = document.querySelector('select#iscredit');
@@ -80,9 +78,10 @@ async def get_rate_from_site(url, selector, action=None):
                         }}
                     """)
                     print(f"[DEBUG] Установил iscredit = {value}")
+                    await page.wait_for_timeout(2000)  # Ждём, пока JS перерисует радио-кнопки
 
+                # ШАГ 2: Выбираем радио-кнопку (если нужна)
                 if sposob:
-                    # Принудительно выбираем радио-кнопку SPOSOB
                     await page.evaluate(f"""
                         () => {{
                             const radio = document.querySelector('input[name="SPOSOB"][value="{sposob}"]');
@@ -93,11 +92,10 @@ async def get_rate_from_site(url, selector, action=None):
                         }}
                     """)
                     print(f"[DEBUG] Установил SPOSOB = {sposob}")
+                    await page.wait_for_timeout(2000)
 
-                await page.wait_for_timeout(3000)
                 print(f"[DEBUG] Action выполнен")
 
-            # === ЧТЕНИЕ СТАВКИ ===
             if selector.startswith("input#"):
                 value = await page.evaluate(f"document.querySelector('{selector}')?.value")
                 print(f"[DEBUG] input.value = {value}")
