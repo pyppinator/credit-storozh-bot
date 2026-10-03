@@ -24,6 +24,11 @@ ACTION_MAP = {
     "select_vremya_stroit_1": (None, "4"),
     # Рефинансирование ипотеки (нет select, только радио)
     "select_refin_1": (None, "4"),
+    # Ипотека Экспресс
+    "select_ekspress_101": ("101", "4"),
+    "select_ekspress_102": ("102", "4"),
+    "select_ekspress_103": ("103", "4"),
+    "select_ekspress_104": ("104", "4"),
 }
 
 # ============ ПОЛУЧЕНИЕ СТАВКИ ============

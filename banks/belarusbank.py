@@ -122,5 +122,34 @@ BELARUSBANK = {
                 },
             }
         },
+        "ipoteka_ekspress": {
+            "name": "⚡ Кредит «Ипотека Экспресс»",
+            "products": {
+                "ekspress_101": {
+                    "name": "У застройщика",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/",
+                    "selector": "input#stavka",
+                    "action": "select_ekspress_101"
+                },
+                "ekspress_102": {
+                    "name": "У застройщика (для нуждающихся)",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/",
+                    "selector": "input#stavka",
+                    "action": "select_ekspress_102"
+                },
+                "ekspress_103": {
+                    "name": "У физ. (юр.) лица",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/",
+                    "selector": "input#stavka",
+                    "action": "select_ekspress_103"
+                },
+                "ekspress_104": {
+                    "name": "У физ. (юр.) лица (для нуждающихся)",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/",
+                    "selector": "input#stavka",
+                    "action": "select_ekspress_104"
+                },
+            }
+        },
     }
 }
