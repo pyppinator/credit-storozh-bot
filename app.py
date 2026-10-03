@@ -39,7 +39,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # ============ ХЕНДЛЕРЫ ============
-# (все обработчики остаются без изменений — вставь их из предыдущего кода)
+# (вставь сюда все обработчики из предыдущей версии app.py — они не менялись)
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
@@ -52,7 +52,7 @@ async def cmd_start(message: Message):
         parse_mode="HTML"
     )
 
-# ... остальные обработчики ...
+# ... все остальные обработчики ...
 
 # ============ WEBHOOK ============
 
@@ -79,17 +79,12 @@ def create_webhook_app():
     )
     webhook_requests_handler.register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
+    # ВАЖНО: регистрируем on_startup ПОСЛЕ setup_application
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
     return app
 
 if __name__ == "__main__":
     init_db()
-    
-    # УСТАНАВЛИВАЕМ WEBHOOK ДО ЗАПУСКА ПРИЛОЖЕНИЯ
-    webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
-    asyncio.run(bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET, drop_pending_updates=True))
-    print(f"Webhook установлен: {webhook_url}")
-    
     app = create_webhook_app()
     web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
