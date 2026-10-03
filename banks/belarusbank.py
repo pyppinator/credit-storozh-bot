@@ -100,5 +100,16 @@ BELARUSBANK = {
                 },
             }
         },
+        "vremya_stroit": {
+            "name": "🏗️ Кредит «Время строить»",
+            "products": {
+                "vremya_stroit_1": {
+                    "name": "Время строить (Витебск, Могилёв)",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-vremya-stroit-na-vozvedenie-zhilykh-pomeshcheniy-v-mnogokvartirnykh-zhilykh-domakh-zastroyshch/",
+                    "selector": "input#stavka",
+                    "action": "select_vremya_stroit_1"
+                },
+            }
+        },
     }
 }

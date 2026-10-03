@@ -20,6 +20,8 @@ ACTION_MAP = {
     "select_pokupka_142": ("142", "2"),
     "select_pokupka_145": ("145", "2"),
     "select_pokupka_146": ("146", "2"),
+    # Время строить (нет select, только радио)
+    "select_vremya_stroit_1": (None, "4"),
 }
 
 # ============ ПОЛУЧЕНИЕ СТАВКИ ============
