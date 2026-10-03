@@ -67,6 +67,15 @@ ACTION_MAP = {
     "select_obnovlenie_63": (None, "63"),
 }
 
+# ============ БЛОКИРОВКА ЛИШНИХ РЕСУРСОВ ============
+
+async def block_resources(route):
+    """Блокируем картинки, стили, шрифты — ускоряет загрузку в 2-3 раза"""
+    if route.request.resource_type in ["image", "stylesheet", "font", "media"]:
+        await route.abort()
+    else:
+        await route.continue_()
+
 # ============ ПОЛУЧЕНИЕ СТАВКИ ============
 
 async def get_rate_from_site(url, selector, action=None):
@@ -74,10 +83,14 @@ async def get_rate_from_site(url, selector, action=None):
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         await page.set_extra_http_headers({"Accept-Language": "ru-RU,ru;q=0.9"})
+
+        # Блокируем лишние ресурсы (картинки, стили, шрифты)
+        await page.route("**/*", block_resources)
+
         try:
             print(f"[DEBUG] Открываю {url}")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(1000)  # уменьшили с 2000 до 1000
 
             if action:
                 print(f"[DEBUG] Выполняю action: {action}")
@@ -93,7 +106,7 @@ async def get_rate_from_site(url, selector, action=None):
                             }}
                         }}
                     """)
-                    await page.wait_for_timeout(2000)
+                    await page.wait_for_timeout(1000)  # уменьшили с 2000 до 1000
 
                 if radio_value:
                     await page.evaluate(f"""
@@ -108,11 +121,9 @@ async def get_rate_from_site(url, selector, action=None):
                             }}
                         }}
                     """)
-                    await page.wait_for_timeout(2000)
+                    await page.wait_for_timeout(1000)  # уменьшили с 2000 до 1000
 
             # === МТБанк ===
-
-            # Грейс + основная (два элемента)
             if selector == "mtbank_na_mary" or selector == "mtbank_greeting_text":
                 value = await page.evaluate("""
                     () => {
@@ -127,7 +138,6 @@ async def get_rate_from_site(url, selector, action=None):
                 await browser.close()
                 return value if value else None
 
-            # Только текст (льготный период + ставка)
             if selector == "mtbank_text_only":
                 value = await page.evaluate("""
                     () => {
@@ -138,8 +148,7 @@ async def get_rate_from_site(url, selector, action=None):
                 await browser.close()
                 return value if value else None
 
-            # Только одна ставка (title)
-            if selector == "mtbank_prosto" or selector == "mtbank_refin" or selector == "mtbank_pensia" or selector == "mtbank_online" or selector == "mtbank_21vek" or selector == "mtbank_gotovoe" or selector == "mtbank_dolevoe":
+            if selector in ["mtbank_prosto", "mtbank_refin", "mtbank_pensia", "mtbank_online", "mtbank_21vek", "mtbank_gotovoe", "mtbank_dolevoe"]:
                 value = await page.evaluate("""
                     () => {
                         const title = document.querySelector('.hero-banner__feature-title');
@@ -150,7 +159,6 @@ async def get_rate_from_site(url, selector, action=None):
                 return value if value else None
 
             # === Беларусбанк ===
-
             if selector == "input#stavka":
                 value = await page.evaluate(f"document.querySelector('{selector}')?.value")
                 await browser.close()
@@ -167,7 +175,6 @@ async def get_rate_from_site(url, selector, action=None):
                 return value if value else None
 
             # === Технобанк ===
-
             await page.wait_for_selector(selector, timeout=15000)
             elements = await page.query_selector_all(selector)
             values = []
