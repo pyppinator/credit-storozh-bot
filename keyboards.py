@@ -21,49 +21,28 @@ def banks_menu():
     buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="back_main")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-def groups_menu(bank_id):
-    bank = BANKS.get(bank_id)
-    if not bank or "groups" not in bank:
-        return None
-    buttons = []
-    for group_id, group_data in bank["groups"].items():
-        buttons.append([InlineKeyboardButton(
-            text=group_data["name"],
-            callback_data=f"group_{bank_id}_{group_id}"
-        )])
-    buttons.append([InlineKeyboardButton(text="📝 Нет моего кредита", callback_data="no_product")])
-    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="choose_bank")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-def group_products_menu(bank_id, group_id):
-    bank = BANKS.get(bank_id)
-    if not bank or "groups" not in bank:
-        return None
-    group = bank["groups"].get(group_id)
-    if not group:
-        return None
-    buttons = []
-    for prod_id, prod_data in group["products"].items():
-        buttons.append([InlineKeyboardButton(
-            text=f"💳 {prod_data['name']}",
-            callback_data=f"prod_{bank_id}_{group_id}_{prod_id}"
-        )])
-    buttons.append([InlineKeyboardButton(text="📝 Нет моего кредита", callback_data="no_product")])
-    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"bank_{bank_id}")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-def products_menu(bank_id):
+def bank_menu(bank_id):
+    """Меню банка: категории или продукты"""
     bank = BANKS.get(bank_id)
     if not bank:
         return None
     buttons = []
-    if "groups" in bank:
+    if "categories" in bank:
+        # Показываем категории
+        for cat_id, cat_data in bank["categories"].items():
+            buttons.append([InlineKeyboardButton(
+                text=cat_data["name"],
+                callback_data=f"cat_{bank_id}_{cat_id}"
+            )])
+    elif "groups" in bank:
+        # Показываем группы
         for group_id, group_data in bank["groups"].items():
             buttons.append([InlineKeyboardButton(
                 text=group_data["name"],
                 callback_data=f"group_{bank_id}_{group_id}"
             )])
-    else:
+    elif "products" in bank:
+        # Показываем продукты
         for prod_id, prod_data in bank["products"].items():
             buttons.append([InlineKeyboardButton(
                 text=f"💳 {prod_data['name']}",
@@ -71,6 +50,49 @@ def products_menu(bank_id):
             )])
     buttons.append([InlineKeyboardButton(text="📝 Нет моего кредита", callback_data="no_product")])
     buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="choose_bank")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def category_menu(bank_id, cat_id):
+    """Меню категории: группы"""
+    bank = BANKS.get(bank_id)
+    if not bank or "categories" not in bank:
+        return None
+    category = bank["categories"].get(cat_id)
+    if not category:
+        return None
+    buttons = []
+    for group_id, group_data in category["groups"].items():
+        buttons.append([InlineKeyboardButton(
+            text=group_data["name"],
+            callback_data=f"group_{bank_id}_{cat_id}_{group_id}"
+        )])
+    buttons.append([InlineKeyboardButton(text="📝 Нет моего кредита", callback_data="no_product")])
+    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"bank_{bank_id}")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def group_menu(bank_id, cat_id, group_id):
+    """Меню группы: продукты"""
+    bank = BANKS.get(bank_id)
+    if not bank:
+        return None
+    group = None
+    if "categories" in bank:
+        category = bank["categories"].get(cat_id)
+        if category:
+            group = category["groups"].get(group_id)
+    elif "groups" in bank:
+        group = bank["groups"].get(group_id)
+    if not group:
+        return None
+    buttons = []
+    for prod_id, prod_data in group["products"].items():
+        buttons.append([InlineKeyboardButton(
+            text=f"💳 {prod_data['name']}",
+            callback_data=f"prod_{bank_id}_{cat_id}_{group_id}_{prod_id}"
+        )])
+    buttons.append([InlineKeyboardButton(text="📝 Нет моего кредита", callback_data="no_product")])
+    back_callback = f"cat_{bank_id}_{cat_id}" if cat_id else f"bank_{bank_id}"
+    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def subscriptions_menu():

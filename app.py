@@ -8,7 +8,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 
 from keyboards import (
-    main_menu, banks_menu, products_menu, groups_menu, group_products_menu,
+    main_menu, banks_menu, bank_menu, category_menu, group_menu,
     subscriptions_menu, unsubscribe_menu, refinance_menu,
     admin_menu, top_products_menu
 )
@@ -111,8 +111,27 @@ async def bank_selected(callback: CallbackQuery):
         await callback.answer("Банк не найден")
         return
     await callback.message.edit_text(
-        f"💳 <b>Кредиты {bank['name']}:</b>",
-        reply_markup=products_menu(bank_id),
+        f"💳 <b>{bank['name']}</b>\n\nВыбери категорию:",
+        reply_markup=bank_menu(bank_id),
+        parse_mode="HTML"
+    )
+
+@dp.callback_query(F.data.startswith("cat_"))
+async def category_selected(callback: CallbackQuery):
+    parts = callback.data.split("_")
+    bank_id = parts[1]
+    cat_id = "_".join(parts[2:])
+    bank = BANKS.get(bank_id)
+    if not bank or "categories" not in bank:
+        await callback.answer("Категория не найдена")
+        return
+    category = bank["categories"].get(cat_id)
+    if not category:
+        await callback.answer("Категория не найдена")
+        return
+    await callback.message.edit_text(
+        f"💳 <b>{category['name']}</b>\n\nВыбери группу:",
+        reply_markup=category_menu(bank_id, cat_id),
         parse_mode="HTML"
     )
 
@@ -120,23 +139,44 @@ async def bank_selected(callback: CallbackQuery):
 async def group_selected(callback: CallbackQuery):
     parts = callback.data.split("_")
     bank_id = parts[1]
-    group_id = "_".join(parts[2:])
+    rest = "_".join(parts[2:])
     bank = BANKS.get(bank_id)
-    if not bank or "groups" not in bank:
-        await callback.answer("Группа не найдена")
+    if not bank:
+        await callback.answer("Банк не найден")
         return
-    group = bank["groups"].get(group_id)
+
+    cat_id = None
+    group_id = rest
+
+    # Если у банка есть категории — ищем группу внутри категории
+    if "categories" in bank:
+        for cat_key, cat_data in bank["categories"].items():
+            if rest.startswith(cat_key + "_"):
+                cat_id = cat_key
+                group_id = rest[len(cat_key) + 1:]
+                break
+
+    group = None
+    if cat_id:
+        category = bank["categories"].get(cat_id)
+        if category:
+            group = category["groups"].get(group_id)
+    elif "groups" in bank:
+        group = bank["groups"].get(group_id)
+
     if not group:
         await callback.answer("Группа не найдена")
         return
+
     await callback.message.edit_text(
         f"💳 <b>{group['name']}</b>\n\nВыбери вариант:",
-        reply_markup=group_products_menu(bank_id, group_id),
+        reply_markup=group_menu(bank_id, cat_id, group_id),
         parse_mode="HTML"
     )
 
 @dp.callback_query(F.data.startswith("prod_"))
 async def product_selected(callback: CallbackQuery):
+    # Формат: prod_{bank_id}_{cat_id}_{group_id}_{prod_id} ИЛИ prod_{bank_id}_{prod_id}
     parts = callback.data.split("_")
     bank_id = parts[1]
     bank = BANKS.get(bank_id)
@@ -146,10 +186,21 @@ async def product_selected(callback: CallbackQuery):
 
     product = None
 
-    # Ищем продукт в группах
-    if "groups" in bank:
+    # Ищем продукт перебором всех возможных мест
+    if "categories" in bank:
+        for cat_id, cat_data in bank["categories"].items():
+            for group_id, group_data in cat_data["groups"].items():
+                prefix = f"prod_{bank_id}_{cat_id}_{group_id}_"
+                if callback.data.startswith(prefix):
+                    prod_id = callback.data[len(prefix):]
+                    product = group_data["products"].get(prod_id)
+                    if product:
+                        break
+            if product:
+                break
+
+    if not product and "groups" in bank:
         for group_id, group_data in bank["groups"].items():
-            # Проверяем, что callback начинается с prod_{bank_id}_{group_id}_
             prefix = f"prod_{bank_id}_{group_id}_"
             if callback.data.startswith(prefix):
                 prod_id = callback.data[len(prefix):]
@@ -157,7 +208,6 @@ async def product_selected(callback: CallbackQuery):
                 if product:
                     break
 
-    # Ищем продукт в обычных продуктах (для банков без групп)
     if not product and "products" in bank:
         prefix = f"prod_{bank_id}_"
         if callback.data.startswith(prefix):
