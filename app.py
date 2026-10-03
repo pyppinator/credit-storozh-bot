@@ -145,16 +145,24 @@ async def product_selected(callback: CallbackQuery):
         return
 
     product = None
-    if "groups" in bank:
-        group_id = parts[2]
-        prod_id = "_".join(parts[3:])
-        group = bank["groups"].get(group_id)
-        if group:
-            product = group["products"].get(prod_id)
 
+    # Ищем продукт в группах
+    if "groups" in bank:
+        for group_id, group_data in bank["groups"].items():
+            # Проверяем, что callback начинается с prod_{bank_id}_{group_id}_
+            prefix = f"prod_{bank_id}_{group_id}_"
+            if callback.data.startswith(prefix):
+                prod_id = callback.data[len(prefix):]
+                product = group_data["products"].get(prod_id)
+                if product:
+                    break
+
+    # Ищем продукт в обычных продуктах (для банков без групп)
     if not product and "products" in bank:
-        prod_id = "_".join(parts[2:])
-        product = bank["products"].get(prod_id)
+        prefix = f"prod_{bank_id}_"
+        if callback.data.startswith(prefix):
+            prod_id = callback.data[len(prefix):]
+            product = bank["products"].get(prod_id)
 
     if not product:
         await callback.answer("Кредит не найден")
