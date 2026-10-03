@@ -148,7 +148,6 @@ async def group_selected(callback: CallbackQuery):
     cat_id = None
     group_id = rest
 
-    # Если у банка есть категории — ищем группу внутри категории
     if "categories" in bank:
         for cat_key, cat_data in bank["categories"].items():
             if rest.startswith(cat_key + "_"):
@@ -176,7 +175,6 @@ async def group_selected(callback: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("prod_"))
 async def product_selected(callback: CallbackQuery):
-    # Формат: prod_{bank_id}_{cat_id}_{group_id}_{prod_id} ИЛИ prod_{bank_id}_{prod_id}
     parts = callback.data.split("_")
     bank_id = parts[1]
     bank = BANKS.get(bank_id)
@@ -186,7 +184,6 @@ async def product_selected(callback: CallbackQuery):
 
     product = None
 
-    # Ищем продукт перебором всех возможных мест
     if "categories" in bank:
         for cat_id, cat_data in bank["categories"].items():
             for group_id, group_data in cat_data["groups"].items():
@@ -241,11 +238,12 @@ async def product_selected(callback: CallbackQuery):
     await callback.message.edit_text(
         f"✅ <b>Ты подписан!</b>\n\n"
         f"Банк: {bank['name']}\n"
-        f"Кредит: «{product['name']}»\n"
+        f"Кредит: <a href=\"{product['url']}\">{product['name']}</a>\n"
         f"Текущая ставка: <b>{rate}</b>\n\n"
         f"Я буду следить за изменениями и сообщу, если что-то поменяется.",
         reply_markup=main_menu(),
-        parse_mode="HTML"
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
 @dp.callback_query(F.data == "help")
