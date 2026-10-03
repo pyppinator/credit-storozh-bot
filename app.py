@@ -38,7 +38,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# ============ ПОЛУЧЕНИЕ СТАВКИ ============
+# ============ ПОЛУЧЕНИЕ СТАВКИ (С ОТЛАДКОЙ) ============
 
 async def get_rate_from_site(url, selector, action=None):
     async with async_playwright() as p:
@@ -46,47 +46,57 @@ async def get_rate_from_site(url, selector, action=None):
         page = await browser.new_page()
         await page.set_extra_http_headers({"Accept-Language": "ru-RU,ru;q=0.9"})
         try:
+            print(f"[DEBUG] Открываю {url}")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-
-            if action == "select_ipoteka_24":
-                await page.select_option("select#iscredit", value="111")
-            elif action == "select_ipoteka_12":
-                await page.select_option("select#iscredit", value="112")
-                await page.click("input[name='SPOSOB'][value='21']")
-            elif action == "select_ipoteka_12_gos":
-                await page.select_option("select#iscredit", value="112")
-                await page.click("input[name='SPOSOB'][value='23']")
-            elif action == "select_vozvedenie_092":
-                await page.select_option("select#iscredit", value="092")
-            elif action == "select_vozvedenie_091":
-                await page.select_option("select#iscredit", value="091")
-            elif action == "select_vozvedenie_093":
-                await page.select_option("select#iscredit", value="093")
-            elif action == "select_vozvedenie_094":
-                await page.select_option("select#iscredit", value="094")
-            elif action == "select_vozvedenie_095":
-                await page.select_option("select#iscredit", value="095")
+            print(f"[DEBUG] Страница загружена")
 
             if action:
+                print(f"[DEBUG] Выполняю action: {action}")
+                if action == "select_ipoteka_24":
+                    await page.select_option("select#iscredit", value="111")
+                elif action == "select_ipoteka_12":
+                    await page.select_option("select#iscredit", value="112")
+                    await page.click("input[name='SPOSOB'][value='21']")
+                elif action == "select_ipoteka_12_gos":
+                    await page.select_option("select#iscredit", value="112")
+                    await page.click("input[name='SPOSOB'][value='23']")
+                elif action == "select_vozvedenie_092":
+                    await page.select_option("select#iscredit", value="092")
+                elif action == "select_vozvedenie_091":
+                    await page.select_option("select#iscredit", value="091")
+                elif action == "select_vozvedenie_093":
+                    await page.select_option("select#iscredit", value="093")
+                elif action == "select_vozvedenie_094":
+                    await page.select_option("select#iscredit", value="094")
+                elif action == "select_vozvedenie_095":
+                    await page.select_option("select#iscredit", value="095")
                 await page.wait_for_timeout(5000)
+                print(f"[DEBUG] Action выполнен")
 
-            await page.wait_for_selector(selector, timeout=20000)
             element = await page.query_selector(selector)
             if not element:
+                print(f"[DEBUG] Элемент {selector} НЕ НАЙДЕН")
+                content = await page.content()
+                print(f"[DEBUG] Длина HTML: {len(content)}")
+                print(f"[DEBUG] Есть 'stavka' в HTML: {'stavka' in content}")
+                print(f"[DEBUG] Есть 'iscredit' в HTML: {'iscredit' in content}")
                 await browser.close()
                 return None
 
+            print(f"[DEBUG] Элемент найден")
             tag = await element.evaluate("el => el.tagName.toLowerCase()")
             if tag == "input":
                 value = await element.input_value()
+                print(f"[DEBUG] input.value = {value}")
             else:
                 value = await element.inner_text()
                 value = value.strip()
+                print(f"[DEBUG] inner_text = {value}")
 
             await browser.close()
             return value
         except Exception as e:
-            print(f"Ошибка получения ставки: {e}")
+            print(f"[DEBUG] ОШИБКА: {type(e).__name__}: {e}")
             await browser.close()
             return None
 
@@ -239,7 +249,6 @@ async def product_selected(callback: CallbackQuery):
     product = None
 
     if "groups" in bank:
-        # callback_data: prod_{bank_id}_{group_id}_{prod_id}
         group_id = parts[2]
         prod_id = "_".join(parts[3:])
         group = bank["groups"].get(group_id)
@@ -247,7 +256,6 @@ async def product_selected(callback: CallbackQuery):
             product = group["products"].get(prod_id)
 
     if not product and "products" in bank:
-        # callback_data: prod_{bank_id}_{prod_id}
         prod_id = "_".join(parts[2:])
         product = bank["products"].get(prod_id)
 
