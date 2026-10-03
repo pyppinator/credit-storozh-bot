@@ -1,50 +1,71 @@
 from playwright.async_api import async_playwright
 
-# ============ КАРТА ДЕЙСТВИЙ ДЛЯ БЕЛАРУСБАНКА ============
+# ============ КАРТА ДЕЙСТВИЙ ============
+# Формат: "action_name": (значение select#iscredit, значение радио)
 
 ACTION_MAP = {
-    # Ипотека с нами
+    # === ИПОТЕКА ===
     "select_ipoteka_24": ("111", None),
     "select_ipoteka_12": ("112", "21"),
     "select_ipoteka_12_gos": ("112", "23"),
-    # Возведение жилья
     "select_vozvedenie_092": ("092", None),
     "select_vozvedenie_091": ("091", None),
     "select_vozvedenie_093": ("093", None),
     "select_vozvedenie_094": ("094", None),
     "select_vozvedenie_095": ("095", None),
-    # Приобретение жилья / незавершённое строение
     "select_pokupka_143": ("143", "2"),
     "select_pokupka_144": ("144", "2"),
     "select_pokupka_141": ("141", "2"),
     "select_pokupka_142": ("142", "2"),
     "select_pokupka_145": ("145", "2"),
     "select_pokupka_146": ("146", "2"),
-    # Время строить (нет select, только радио)
     "select_vremya_stroit_1": (None, "4"),
-    # Рефинансирование ипотеки (нет select, только радио)
     "select_refin_1": (None, "4"),
-    # Ипотека Экспресс
     "select_ekspress_101": ("101", "4"),
     "select_ekspress_102": ("102", "4"),
     "select_ekspress_103": ("103", "4"),
     "select_ekspress_104": ("104", "4"),
-    # Стройсбережения
     "select_stroysber_vozvedenie_6": (None, "6"),
     "select_stroysber_vozvedenie_8": (None, "8"),
     "select_stroysber_priobretenie_6": (None, "6"),
     "select_stroysber_priobretenie_8": (None, "8"),
-    # Субсидия (нет select и радио)
     "select_subsidiya_1": (None, None),
-    # Докредитование (нет select, только радио)
     "select_dokredit_2": (None, "2"),
     "select_dokredit_3": (None, "3"),
-    # Стройдом (нет select, только радио)
     "select_stroydom_2": (None, "2"),
     "select_stroydom_3": (None, "3"),
-    # Дом для Авто (есть select + радио)
     "select_avto_131": ("131", "2"),
     "select_avto_132": ("132", "2"),
+    # === ПОТРЕБИТЕЛЬСКИЕ ===
+    "select_svaye_5": (None, "5"),
+    "select_svaye_7": (None, "7"),
+    "select_svaye_doma_63": (None, "63"),
+    "select_med_5": (None, "5"),
+    "select_med_7": (None, "7"),
+    "select_tur_63": (None, "63"),
+    "select_rodnyya_143": ("143", "35"),
+    "select_rodnyya_142": ("142", "35"),
+    "select_rodnyya_141": ("141", "35"),
+    "select_belgee_21": (None, "21"),
+    "select_belgee_24": (None, "24"),
+    "select_belgee_27": (None, "27"),
+    "select_geely_61": (None, "61"),
+    "select_geely_58": (None, "58"),
+    "select_geely_47": (None, "47"),
+    "select_geely_18": (None, "18"),
+    "select_legko_11": (None, "11"),
+    "select_legko_8": (None, "8"),
+    "select_legko_13": (None, "13"),
+    "select_legko_10": (None, "10"),
+    "select_legko_svaye_50": (None, "50"),
+    "select_legko_svaye_21": (None, "21"),
+    "select_legko_svaye_52": (None, "52"),
+    "select_auto_161": ("161", "39"),
+    "select_auto_162": ("162", "39"),
+    "select_barkhat_63": (None, "63"),
+    "select_ledi_5": (None, "5"),
+    "select_ledi_7": (None, "7"),
+    "select_obnovlenie_63": (None, "63"),
 }
 
 # ============ ПОЛУЧЕНИЕ СТАВКИ ============
@@ -61,7 +82,7 @@ async def get_rate_from_site(url, selector, action=None):
 
             if action:
                 print(f"[DEBUG] Выполняю action: {action}")
-                value, sposob = ACTION_MAP.get(action, (None, None))
+                value, radio_value = ACTION_MAP.get(action, (None, None))
 
                 if value:
                     await page.evaluate(f"""
@@ -76,32 +97,33 @@ async def get_rate_from_site(url, selector, action=None):
                     print(f"[DEBUG] Установил iscredit = {value}")
                     await page.wait_for_timeout(2000)
 
-                if sposob:
+                if radio_value:
+                    # Пробуем и SPOSOB, и SEND
                     await page.evaluate(f"""
                         () => {{
-                            const radio = document.querySelector('input[name="SPOSOB"][value="{sposob}"]');
+                            let radio = document.querySelector('input[name="SPOSOB"][value="{radio_value}"]');
+                            if (!radio) {{
+                                radio = document.querySelector('input[name="SEND"][value="{radio_value}"]');
+                            }}
                             if (radio) {{
                                 radio.checked = true;
                                 radio.dispatchEvent(new Event('change', {{ bubbles: true }}));
                             }}
                         }}
                     """)
-                    print(f"[DEBUG] Установил SPOSOB = {sposob}")
+                    print(f"[DEBUG] Установил радио = {radio_value}")
                     await page.wait_for_timeout(2000)
 
                 print(f"[DEBUG] Action выполнен")
 
             # === ЧТЕНИЕ СТАВКИ ===
 
-            # Если селектор — это input#stavka
             if selector == "input#stavka":
                 value = await page.evaluate(f"document.querySelector('{selector}')?.value")
                 print(f"[DEBUG] input.value = {value}")
                 await browser.close()
                 return value if value else None
 
-            # Если селектор — это .detail-banner__prop_title (для субсидии)
-            # Берём ВТОРОЙ элемент (индекс 1) — там ставка, а не срок
             if selector == ".detail-banner__prop_title":
                 value = await page.evaluate(f"""
                     () => {{
@@ -113,7 +135,6 @@ async def get_rate_from_site(url, selector, action=None):
                 await browser.close()
                 return value if value else None
 
-            # Иначе — ищем через query_selector_all (Технобанк)
             await page.wait_for_selector(selector, timeout=15000)
             elements = await page.query_selector_all(selector)
             values = []
