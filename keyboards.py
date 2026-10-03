@@ -22,7 +22,6 @@ def banks_menu():
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def groups_menu(bank_id):
-    """Меню групп продуктов (например, 'Ипотека с нами', 'Возведение')"""
     bank = BANKS.get(bank_id)
     if not bank or "groups" not in bank:
         return None
@@ -37,7 +36,6 @@ def groups_menu(bank_id):
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def group_products_menu(bank_id, group_id):
-    """Меню продуктов внутри группы"""
     bank = BANKS.get(bank_id)
     if not bank or "groups" not in bank:
         return None
@@ -55,20 +53,17 @@ def group_products_menu(bank_id, group_id):
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def products_menu(bank_id):
-    """Меню продуктов (для банков без групп — например, Технобанк)"""
     bank = BANKS.get(bank_id)
     if not bank:
         return None
     buttons = []
     if "groups" in bank:
-        # Если есть группы — показываем группы
         for group_id, group_data in bank["groups"].items():
             buttons.append([InlineKeyboardButton(
                 text=group_data["name"],
                 callback_data=f"group_{bank_id}_{group_id}"
             )])
     else:
-        # Если групп нет — показываем продукты напрямую
         for prod_id, prod_data in bank["products"].items():
             buttons.append([InlineKeyboardButton(
                 text=f"💳 {prod_data['name']}",
@@ -103,6 +98,7 @@ def refinance_menu():
 def admin_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика и подписки", callback_data="admin_subs")],
+        [InlineKeyboardButton(text="❌ Отписаться от ВСЕХ", callback_data="admin_unsub_all")],
         [InlineKeyboardButton(text="🏠 В главное меню", callback_data="back_main")],
     ])
 

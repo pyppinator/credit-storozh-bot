@@ -16,7 +16,7 @@ from database import (
     init_db, add_subscription, get_user_subscriptions,
     get_user_subscriptions_with_id, delete_subscription_by_id, add_request,
     check_subscription_exists, get_current_rate, get_all_subscriptions, get_stats,
-    get_grouped_subscriptions
+    get_grouped_subscriptions, delete_all_user_subscriptions
 )
 from products import BANKS
 from products_map import PRODUCTS_MAP
@@ -301,6 +301,20 @@ async def admin_panel(callback: CallbackQuery):
         "🔐 <b>Админ-панель</b>\n\n"
         "Здесь ты можешь посмотреть статистику и всех подписчиков.",
         reply_markup=admin_menu(),
+        parse_mode="HTML"
+    )
+
+@dp.callback_query(F.data == "admin_unsub_all")
+async def admin_unsub_all(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    count = delete_all_user_subscriptions(callback.from_user.id)
+    await callback.message.edit_text(
+        f"✅ <b>Ты отписан от всех подписок!</b>\n\n"
+        f"Удалено: <b>{count}</b> шт.\n\n"
+        f"Теперь можно тестировать заново.",
+        reply_markup=main_menu(is_admin=True),
         parse_mode="HTML"
     )
 

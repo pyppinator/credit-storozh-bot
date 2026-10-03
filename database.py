@@ -75,6 +75,14 @@ def delete_subscription_by_id(sub_id, user_id):
     session.commit()
     session.close()
 
+def delete_all_user_subscriptions(user_id):
+    """Удаляет ВСЕ подписки пользователя"""
+    session = SessionLocal()
+    count = session.query(Subscription).filter_by(user_id=user_id).delete()
+    session.commit()
+    session.close()
+    return count
+
 def add_request(user_id, username, text):
     session = SessionLocal()
     req = Request(user_id=user_id, username=username, text=text, created_at=datetime.now().isoformat())
@@ -117,7 +125,6 @@ def get_all_subscriptions():
     return rows
 
 def get_grouped_subscriptions():
-    """Возвращает подписки, сгруппированные по пользователям"""
     session = SessionLocal()
     rows = session.query(Subscription).order_by(Subscription.user_id, Subscription.created_at).all()
     session.close()
