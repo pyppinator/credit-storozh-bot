@@ -44,4 +44,57 @@ BANKS = {
             },
         }
     },
+    "belarusbank": {
+        "name": "Беларусбанк",
+        "products": {
+            "ipoteka_24": {
+                "name": "Кредит «Ипотека с нами» (грейс 24 мес.)",
+                "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-s-nami-v-ramkakh-partnerskikh-programm/",
+                "selector": "input#stavka",
+                "action": "select_ipoteka_24"
+            },
+            "ipoteka_12": {
+                "name": "Кредит «Ипотека с нами» (грейс 12 мес.)",
+                "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-s-nami-v-ramkakh-partnerskikh-programm/",
+                "selector": "input#stavka",
+                "action": "select_ipoteka_12"
+            },
+            "ipoteka_12_gos": {
+                "name": "Кредит «Ипотека с нами» (грейс 12 мес., гос. застройщик)",
+                "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-s-nami-v-ramkakh-partnerskikh-programm/",
+                "selector": "input#stavka",
+                "action": "select_ipoteka_12_gos"
+            },
+            "vozvedenie_092": {
+                "name": "Возведение жилья (для граждан в населённых пунктах до 20 тыс.)",
+                "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/",
+                "selector": "input#stavka",
+                "action": "select_vozvedenie_092"
+            },
+            "vozvedenie_091": {
+                "name": "Возведение жилья (материалы бел. производства, долевое с гос. заказчиками)",
+                "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/",
+                "selector": "input#stavka",
+                "action": "select_vozvedenie_091"
+            },
+            "vozvedenie_093": {
+                "name": "Возведение жилья (для граждан с договорами на строительство, облигации)",
+                "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/",
+                "selector": "input#stavka",
+                "action": "select_vozvedenie_093"
+            },
+            "vozvedenie_094": {
+                "name": "Возведение одноквартирного дома, реконструкция",
+                "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/",
+                "selector": "input#stavka",
+                "action": "select_vozvedenie_094"
+            },
+            "vozvedenie_095": {
+                "name": "Возведение жилья в многоквартирном доме (гос. заказчики)",
+                "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/",
+                "selector": "input#stavka",
+                "action": "select_vozvedenie_095"
+            },
+        }
+    },
 }

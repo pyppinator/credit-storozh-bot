@@ -40,21 +40,52 @@ dp = Dispatcher()
 
 # ============ ПОЛУЧЕНИЕ СТАВКИ ============
 
-async def get_rate_from_site(url, selector):
+async def get_rate_from_site(url, selector, action=None):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         await page.set_extra_http_headers({"Accept-Language": "ru-RU,ru;q=0.9"})
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+
+            # === Беларусбанк: выбор варианта ===
+            if action == "select_ipoteka_24":
+                await page.select_option("select#iscredit", value="111")
+            elif action == "select_ipoteka_12":
+                await page.select_option("select#iscredit", value="112")
+                await page.click("input[name='SPOSOB'][value='21']")
+            elif action == "select_ipoteka_12_gos":
+                await page.select_option("select#iscredit", value="112")
+                await page.click("input[name='SPOSOB'][value='23']")
+            elif action == "select_vozvedenie_092":
+                await page.select_option("select#iscredit", value="092")
+            elif action == "select_vozvedenie_091":
+                await page.select_option("select#iscredit", value="091")
+            elif action == "select_vozvedenie_093":
+                await page.select_option("select#iscredit", value="093")
+            elif action == "select_vozvedenie_094":
+                await page.select_option("select#iscredit", value="094")
+            elif action == "select_vozvedenie_095":
+                await page.select_option("select#iscredit", value="095")
+
+            if action:
+                await page.wait_for_timeout(2000)
+
             await page.wait_for_selector(selector, timeout=15000)
-            elements = await page.query_selector_all(selector)
-            values = []
-            for el in elements:
-                text = await el.inner_text()
-                values.append(text.strip())
+            element = await page.query_selector(selector)
+            if not element:
+                await browser.close()
+                return None
+
+            tag = await element.evaluate("el => el.tagName.toLowerCase()")
+            if tag == "input":
+                value = await element.input_value()
+            else:
+                value = await element.inner_text()
+                value = value.strip()
+
             await browser.close()
-            return ", ".join(values) if values else None
+            return value
         except Exception as e:
             print(f"Ошибка получения ставки: {e}")
             await browser.close()
@@ -73,7 +104,15 @@ async def daily_check():
                 if key not in PRODUCTS_MAP:
                     continue
                 url, selector = PRODUCTS_MAP[key]
-                new_rate = await get_rate_from_site(url, selector)
+                # Ищем action в products.py
+                action = None
+                for bank_id, bank_data in BANKS.items():
+                    if bank_data["name"] == bank:
+                        for prod_id, prod_data in bank_data["products"].items():
+                            if prod_data["name"] == product:
+                                action = prod_data.get("action")
+                                break
+                new_rate = await get_rate_from_site(url, selector, action)
                 if not new_rate:
                     continue
                 old_rate = get_current_rate(bank, product)
@@ -197,7 +236,7 @@ async def product_selected(callback: CallbackQuery):
         "<i>Я загружаю данные с сайта банка, это не быстро. Спасибо за терпение!</i>",
         parse_mode="HTML"
     )
-    rate = await get_rate_from_site(product["url"], product["selector"]) or "не удалось получить"
+    rate = await get_rate_from_site(product["url"], product["selector"], product.get("action")) or "не удалось получить"
 
     add_subscription(
         callback.from_user.id,
@@ -292,7 +331,7 @@ async def no_product(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
-# ============ ПОПУЛЯРНЫЕ КРЕДИТЫ (для всех) ============
+# ============ ПОПУЛЯРНЫЕ КРЕДИТЫ ============
 
 @dp.callback_query(F.data == "top_products")
 async def top_products_handler(callback: CallbackQuery):
