@@ -1,10 +1,9 @@
 from playwright.async_api import async_playwright
 
 # ============ КАРТА ДЕЙСТВИЙ ============
-# Формат: "action_name": (значение select#iscredit, значение радио)
 
 ACTION_MAP = {
-    # === ИПОТЕКА ===
+    # === ИПОТЕКА Беларусбанк ===
     "select_ipoteka_24": ("111", None),
     "select_ipoteka_12": ("112", "21"),
     "select_ipoteka_12_gos": ("112", "23"),
@@ -36,7 +35,7 @@ ACTION_MAP = {
     "select_stroydom_3": (None, "3"),
     "select_avto_131": ("131", "2"),
     "select_avto_132": ("132", "2"),
-    # === ПОТРЕБИТЕЛЬСКИЕ ===
+    # === ПОТРЕБИТЕЛЬСКИЕ Беларусбанк ===
     "select_svaye_5": (None, "5"),
     "select_svaye_7": (None, "7"),
     "select_svaye_doma_63": (None, "63"),
@@ -94,7 +93,6 @@ async def get_rate_from_site(url, selector, action=None):
                             }}
                         }}
                     """)
-                    print(f"[DEBUG] Установил iscredit = {value}")
                     await page.wait_for_timeout(2000)
 
                 if radio_value:
@@ -110,36 +108,54 @@ async def get_rate_from_site(url, selector, action=None):
                             }}
                         }}
                     """)
-                    print(f"[DEBUG] Установил радио = {radio_value}")
                     await page.wait_for_timeout(2000)
 
-                print(f"[DEBUG] Action выполнен")
+            # === МТБанк ===
 
-            # === ЧТЕНИЕ СТАВКИ ===
-
-            # МТБанк: «На мары»
-            if selector == "mtbank_na_mary":
+            # Грейс + основная (два элемента)
+            if selector == "mtbank_na_mary" or selector == "mtbank_greeting_text":
                 value = await page.evaluate("""
                     () => {
                         const title = document.querySelector('.hero-banner__feature-title');
                         const text = document.querySelector('.hero-banner__feature-text');
                         const t = title ? title.innerText.trim() : null;
                         const x = text ? text.innerText.trim() : null;
-                        return t || x ? `Грейс: ${t || '—'} | Основная: ${x || '—'}` : null;
+                        if (t && x) return `${t} | ${x}`;
+                        return t || x || null;
                     }
                 """)
-                print(f"[DEBUG] mtbank_na_mary = {value}")
                 await browser.close()
                 return value if value else None
 
-            # input#stavka
+            # Только текст (льготный период + ставка)
+            if selector == "mtbank_text_only":
+                value = await page.evaluate("""
+                    () => {
+                        const text = document.querySelector('.hero-banner__feature-text');
+                        return text ? text.innerText.trim() : null;
+                    }
+                """)
+                await browser.close()
+                return value if value else None
+
+            # Только одна ставка (title)
+            if selector == "mtbank_prosto" or selector == "mtbank_refin" or selector == "mtbank_pensia" or selector == "mtbank_online" or selector == "mtbank_21vek" or selector == "mtbank_gotovoe" or selector == "mtbank_dolevoe":
+                value = await page.evaluate("""
+                    () => {
+                        const title = document.querySelector('.hero-banner__feature-title');
+                        return title ? title.innerText.trim() : null;
+                    }
+                """)
+                await browser.close()
+                return value if value else None
+
+            # === Беларусбанк ===
+
             if selector == "input#stavka":
                 value = await page.evaluate(f"document.querySelector('{selector}')?.value")
-                print(f"[DEBUG] input.value = {value}")
                 await browser.close()
                 return value if value else None
 
-            # .detail-banner__prop_title
             if selector == ".detail-banner__prop_title":
                 value = await page.evaluate(f"""
                     () => {{
@@ -147,18 +163,17 @@ async def get_rate_from_site(url, selector, action=None):
                         return els.length > 1 ? els[1].innerText : null;
                     }}
                 """)
-                print(f"[DEBUG] banner value (2-й элемент) = {value}")
                 await browser.close()
                 return value if value else None
 
-            # Иначе — query_selector_all
+            # === Технобанк ===
+
             await page.wait_for_selector(selector, timeout=15000)
             elements = await page.query_selector_all(selector)
             values = []
             for el in elements:
                 text = await el.inner_text()
                 values.append(text.strip())
-            print(f"[DEBUG] Найдено элементов: {len(values)}")
             await browser.close()
             return ", ".join(values) if values else None
 
