@@ -28,24 +28,21 @@ def bank_menu(bank_id):
         return None
     buttons = []
     if "categories" in bank:
-        # Показываем категории
         for cat_id, cat_data in bank["categories"].items():
             buttons.append([InlineKeyboardButton(
                 text=cat_data["name"],
                 callback_data=f"cat_{bank_id}_{cat_id}"
             )])
     elif "groups" in bank:
-        # Показываем группы
         for group_id, group_data in bank["groups"].items():
             buttons.append([InlineKeyboardButton(
                 text=group_data["name"],
                 callback_data=f"group_{bank_id}_{group_id}"
             )])
     elif "products" in bank:
-        # Показываем продукты
         for prod_id, prod_data in bank["products"].items():
             buttons.append([InlineKeyboardButton(
-                text=f"💳 {prod_data['name']}",
+                text=prod_data['name'],
                 callback_data=f"prod_{bank_id}_{prod_id}"
             )])
     buttons.append([InlineKeyboardButton(text="📝 Нет моего кредита", callback_data="no_product")])
@@ -87,7 +84,7 @@ def group_menu(bank_id, cat_id, group_id):
     buttons = []
     for prod_id, prod_data in group["products"].items():
         buttons.append([InlineKeyboardButton(
-            text=f"💳 {prod_data['name']}",
+            text=prod_data['name'],
             callback_data=f"prod_{bank_id}_{cat_id}_{group_id}_{prod_id}"
         )])
     buttons.append([InlineKeyboardButton(text="📝 Нет моего кредита", callback_data="no_product")])
