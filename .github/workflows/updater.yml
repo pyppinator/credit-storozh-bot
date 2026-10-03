@@ -2,11 +2,21 @@ name: Update Rates
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 3:00 по Минску (0:00 UTC)
+    - cron: '0 0 * * *'   # 3:00 по Минску — обновление БД
+    - cron: '0 7 * * *'   # 10:00 по Минску — рассылка уведомлений
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Режим: update или notify'
+        required: true
+        default: 'update'
+        type: choice
+        options:
+          - update
+          - notify
 
 jobs:
-  update:
+  run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,4 +31,9 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-        run: python updater.py
+        run: |
+          if [ "${{ github.event.inputs.mode }}" = "notify" ] || [ "${{ github.event.schedule }}" = "0 7 * * *" ]; then
+            python notifier.py
+          else
+            python updater.py
+          fi

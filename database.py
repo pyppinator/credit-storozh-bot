@@ -41,6 +41,17 @@ class Rate(Base):
     rate = Column(Text)
     updated_at = Column(String(50))
 
+class PendingChange(Base):
+    """Отложенные уведомления (накапливаются ночью, рассылаются утром)"""
+    __tablename__ = "pending_changes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False)
+    bank = Column(String(255), nullable=False)
+    product = Column(String(255), nullable=False)
+    old_rate = Column(Text)
+    new_rate = Column(Text)
+    created_at = Column(String(50))
+
 def init_db():
     Base.metadata.create_all(engine)
 
@@ -104,17 +115,15 @@ def update_rate_for_all(bank, product, new_rate):
     session.commit()
     session.close()
 
-# === СТАВКИ (НОВАЯ ТАБЛИЦА) ===
+# === СТАВКИ ===
 
 def get_rate_from_db(bank, product):
-    """Читает актуальную ставку из БД"""
     session = SessionLocal()
     row = session.query(Rate.rate).filter_by(bank=bank, product=product).first()
     session.close()
     return row[0] if row else None
 
 def update_rate_in_db(bank, product, rate):
-    """Обновляет ставку в БД (создаёт, если нет)"""
     session = SessionLocal()
     existing = session.query(Rate).filter_by(bank=bank, product=product).first()
     if existing:
@@ -130,18 +139,45 @@ def update_rate_in_db(bank, product, rate):
     session.close()
 
 def get_all_rates():
-    """Все ставки из БД"""
     session = SessionLocal()
     rows = session.query(Rate.bank, Rate.product, Rate.rate, Rate.updated_at).all()
     session.close()
     return rows
 
 def get_last_update_time():
-    """Когда последний раз обновлялись ставки"""
     session = SessionLocal()
     row = session.query(func.max(Rate.updated_at)).scalar()
     session.close()
     return row
+
+# === ОТЛОЖЕННЫЕ УВЕДОМЛЕНИЯ ===
+
+def add_pending_change(user_id, bank, product, old_rate, new_rate):
+    session = SessionLocal()
+    change = PendingChange(
+        user_id=user_id, bank=bank, product=product,
+        old_rate=old_rate, new_rate=new_rate,
+        created_at=datetime.now().isoformat()
+    )
+    session.add(change)
+    session.commit()
+    session.close()
+
+def get_pending_changes():
+    session = SessionLocal()
+    rows = session.query(
+        PendingChange.id, PendingChange.user_id,
+        PendingChange.bank, PendingChange.product,
+        PendingChange.old_rate, PendingChange.new_rate
+    ).all()
+    session.close()
+    return rows
+
+def clear_pending_changes():
+    session = SessionLocal()
+    session.query(PendingChange).delete()
+    session.commit()
+    session.close()
 
 # === ЗАЯВКИ ===
 
