@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Text, func, desc
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Text, func, desc
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -11,7 +11,6 @@ if not DATABASE_URL:
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Ограничиваем подключения к БД (у Render Free лимит 15)
 engine = create_engine(
     DATABASE_URL,
     echo=False,
@@ -26,7 +25,7 @@ Base = declarative_base()
 class Subscription(Base):
     __tablename__ = "subscriptions"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(BigInteger, nullable=False)  # ← BigInteger
     username = Column(String(255))
     bank = Column(String(255), nullable=False)
     product = Column(String(255), nullable=False)
@@ -36,7 +35,7 @@ class Subscription(Base):
 class Request(Base):
     __tablename__ = "requests"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(BigInteger, nullable=False)  # ← BigInteger
     username = Column(String(255))
     text = Column(Text, nullable=False)
     created_at = Column(String(50))
@@ -52,7 +51,7 @@ class Rate(Base):
 class PendingChange(Base):
     __tablename__ = "pending_changes"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(BigInteger, nullable=False)  # ← BigInteger
     bank = Column(String(255), nullable=False)
     product = Column(String(255), nullable=False)
     old_rate = Column(Text)
