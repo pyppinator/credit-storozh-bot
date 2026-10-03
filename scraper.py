@@ -3,14 +3,23 @@ from playwright.async_api import async_playwright
 # ============ КАРТА ДЕЙСТВИЙ ДЛЯ БЕЛАРУСБАНКА ============
 
 ACTION_MAP = {
+    # Ипотека с нами
     "select_ipoteka_24": ("111", None),
     "select_ipoteka_12": ("112", "21"),
     "select_ipoteka_12_gos": ("112", "23"),
+    # Возведение жилья
     "select_vozvedenie_092": ("092", None),
     "select_vozvedenie_091": ("091", None),
     "select_vozvedenie_093": ("093", None),
     "select_vozvedenie_094": ("094", None),
     "select_vozvedenie_095": ("095", None),
+    # Приобретение жилья / незавершённое строение
+    "select_pokupka_143": ("143", "2"),
+    "select_pokupka_144": ("144", "2"),
+    "select_pokupka_141": ("141", "2"),
+    "select_pokupka_142": ("142", "2"),
+    "select_pokupka_145": ("145", "2"),
+    "select_pokupka_146": ("146", "2"),
 }
 
 # ============ ПОЛУЧЕНИЕ СТАВКИ ============

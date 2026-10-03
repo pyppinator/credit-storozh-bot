@@ -59,5 +59,46 @@ BELARUSBANK = {
                 },
             }
         },
+        "pokupka_zhilya": {
+            "name": "🏠 Приобретение жилья / незавершённое строение",
+            "products": {
+                "pokupka_143": {
+                    "name": "Для граждан в населённых пунктах до 20 тыс.",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/",
+                    "selector": "input#stavka",
+                    "action": "select_pokupka_143"
+                },
+                "pokupka_144": {
+                    "name": "У застройщика",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/",
+                    "selector": "input#stavka",
+                    "action": "select_pokupka_144"
+                },
+                "pokupka_141": {
+                    "name": "У физ. (юр.) лица",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/",
+                    "selector": "input#stavka",
+                    "action": "select_pokupka_141"
+                },
+                "pokupka_142": {
+                    "name": "Незавершённое законсервированное строение",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/",
+                    "selector": "input#stavka",
+                    "action": "select_pokupka_142"
+                },
+                "pokupka_145": {
+                    "name": "Для нуждающихся (у застройщика)",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/",
+                    "selector": "input#stavka",
+                    "action": "select_pokupka_145"
+                },
+                "pokupka_146": {
+                    "name": "Для нуждающихся (у физ. (юр.) лица)",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/",
+                    "selector": "input#stavka",
+                    "action": "select_pokupka_146"
+                },
+            }
+        },
     }
 }
