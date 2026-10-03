@@ -92,9 +92,15 @@ async def get_rate_from_site(url, selector, action=None):
                 return value if value else None
 
             # Если селектор — это .detail-banner__prop_title (для субсидии)
+            # Берём ВТОРОЙ элемент (индекс 1) — там ставка, а не срок
             if selector == ".detail-banner__prop_title":
-                value = await page.evaluate(f"document.querySelector('{selector}')?.innerText")
-                print(f"[DEBUG] banner value = {value}")
+                value = await page.evaluate(f"""
+                    () => {{
+                        const els = document.querySelectorAll('{selector}');
+                        return els.length > 1 ? els[1].innerText : null;
+                    }}
+                """)
+                print(f"[DEBUG] banner value (2-й элемент) = {value}")
                 await browser.close()
                 return value if value else None
 
