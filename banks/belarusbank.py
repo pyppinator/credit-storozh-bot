@@ -191,5 +191,56 @@ BELARUSBANK = {
                 },
             }
         },
+        "dokreditovanie": {
+            "name": "💰 Кредит «Докредитование»",
+            "products": {
+                "dokredit_2": {
+                    "name": "Расчёт по графику",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-dokreditovanie/",
+                    "selector": "input#stavka",
+                    "action": "select_dokredit_2"
+                },
+                "dokredit_3": {
+                    "name": "За фактическое время",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-dokreditovanie/",
+                    "selector": "input#stavka",
+                    "action": "select_dokredit_3"
+                },
+            }
+        },
+        "stroydom": {
+            "name": "🏗️ Кредит «СТРОЙДОМ»",
+            "products": {
+                "stroydom_2": {
+                    "name": "Расчёт по графику",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-stroydom/",
+                    "selector": "input#stavka",
+                    "action": "select_stroydom_2"
+                },
+                "stroydom_3": {
+                    "name": "За фактическое время",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-stroydom/",
+                    "selector": "input#stavka",
+                    "action": "select_stroydom_3"
+                },
+            }
+        },
+        "dom_dlya_avto": {
+            "name": "🚗 Кредит «Дом для Авто»",
+            "products": {
+                "avto_131": {
+                    "name": "Дом для Авто",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-dom-dlya-avto/",
+                    "selector": "input#stavka",
+                    "action": "select_avto_131"
+                },
+                "avto_132": {
+                    "name": "Дом для Авто (с электрозаправкой)",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-dom-dlya-avto/",
+                    "selector": "input#stavka",
+                    "action": "select_avto_132"
+                },
+            }
+        },
     }
 }

@@ -36,6 +36,15 @@ ACTION_MAP = {
     "select_stroysber_priobretenie_8": (None, "8"),
     # Субсидия (нет select и радио)
     "select_subsidiya_1": (None, None),
+    # Докредитование (нет select, только радио)
+    "select_dokredit_2": (None, "2"),
+    "select_dokredit_3": (None, "3"),
+    # Стройдом (нет select, только радио)
+    "select_stroydom_2": (None, "2"),
+    "select_stroydom_3": (None, "3"),
+    # Дом для Авто (есть select + радио)
+    "select_avto_131": ("131", "2"),
+    "select_avto_132": ("132", "2"),
 }
 
 # ============ ПОЛУЧЕНИЕ СТАВКИ ============
