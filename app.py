@@ -48,42 +48,62 @@ async def get_rate_from_site(url, selector, action=None):
         try:
             print(f"[DEBUG] Открываю {url}")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            await page.wait_for_timeout(2000)
             print(f"[DEBUG] Страница загружена")
 
+            # === БЕЛАРУСБАНК: принудительно выбираем опцию через JS ===
             if action:
                 print(f"[DEBUG] Выполняю action: {action}")
-                if action == "select_ipoteka_24":
-                    await page.select_option("select#iscredit", value="111")
-                elif action == "select_ipoteka_12":
-                    await page.select_option("select#iscredit", value="112")
-                    await page.click("input[name='SPOSOB'][value='21']")
-                elif action == "select_ipoteka_12_gos":
-                    await page.select_option("select#iscredit", value="112")
-                    await page.click("input[name='SPOSOB'][value='23']")
-                elif action == "select_vozvedenie_092":
-                    await page.select_option("select#iscredit", value="092")
-                elif action == "select_vozvedenie_091":
-                    await page.select_option("select#iscredit", value="091")
-                elif action == "select_vozvedenie_093":
-                    await page.select_option("select#iscredit", value="093")
-                elif action == "select_vozvedenie_094":
-                    await page.select_option("select#iscredit", value="094")
-                elif action == "select_vozvedenie_095":
-                    await page.select_option("select#iscredit", value="095")
+
+                # Определяем value и SPOSOB для каждого действия
+                action_map = {
+                    "select_ipoteka_24": ("111", None),
+                    "select_ipoteka_12": ("112", "21"),
+                    "select_ipoteka_12_gos": ("112", "23"),
+                    "select_vozvedenie_092": ("092", None),
+                    "select_vozvedenie_091": ("091", None),
+                    "select_vozvedenie_093": ("093", None),
+                    "select_vozvedenie_094": ("094", None),
+                    "select_vozvedenie_095": ("095", None),
+                }
+                value, sposob = action_map.get(action, (None, None))
+
+                if value:
+                    # Принудительно выбираем опцию в скрытом select и вызываем change
+                    await page.evaluate(f"""
+                        () => {{
+                            const sel = document.querySelector('select#iscredit');
+                            if (sel) {{
+                                sel.value = '{value}';
+                                sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            }}
+                        }}
+                    """)
+                    print(f"[DEBUG] Установил iscredit = {value}")
+
+                if sposob:
+                    # Принудительно выбираем радио-кнопку SPOSOB
+                    await page.evaluate(f"""
+                        () => {{
+                            const radio = document.querySelector('input[name="SPOSOB"][value="{sposob}"]');
+                            if (radio) {{
+                                radio.checked = true;
+                                radio.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            }}
+                        }}
+                    """)
+                    print(f"[DEBUG] Установил SPOSOB = {sposob}")
+
                 await page.wait_for_timeout(3000)
                 print(f"[DEBUG] Action выполнен")
 
-            # === ЛОГИКА ДЛЯ INPUT (Беларусбанк) ===
+            # === ЧТЕНИЕ СТАВКИ ===
             if selector.startswith("input#"):
-                print(f"[DEBUG] Читаю INPUT через evaluate")
-                await page.wait_for_timeout(1000)
                 value = await page.evaluate(f"document.querySelector('{selector}')?.value")
                 print(f"[DEBUG] input.value = {value}")
                 await browser.close()
                 return value if value else None
 
-            # === ЛОГИКА ДЛЯ ОБЫЧНЫХ ЭЛЕМЕНТОВ (Технобанк) ===
-            print(f"[DEBUG] Читаю элементы через query_selector_all")
             await page.wait_for_selector(selector, timeout=15000)
             elements = await page.query_selector_all(selector)
             values = []
