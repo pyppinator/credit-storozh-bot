@@ -111,5 +111,16 @@ BELARUSBANK = {
                 },
             }
         },
+        "refinansirovanie": {
+            "name": "🔄 Рефинансирование ипотеки",
+            "products": {
+                "refin_1": {
+                    "name": "Рефинансирование ипотеки",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-refinansirovanie-ipoteki-/",
+                    "selector": "input#stavka",
+                    "action": "select_refin_1"
+                },
+            }
+        },
     }
 }
