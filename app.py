@@ -49,11 +49,8 @@ async def get_rate_from_site(url, selector, action=None):
             print(f"[DEBUG] Открываю {url}")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
             await page.wait_for_timeout(2000)
-            print(f"[DEBUG] Страница загружена")
 
             if action:
-                print(f"[DEBUG] Выполняю action: {action}")
-
                 action_map = {
                     "select_ipoteka_24": ("111", None),
                     "select_ipoteka_12": ("112", "21"),
@@ -66,7 +63,6 @@ async def get_rate_from_site(url, selector, action=None):
                 }
                 value, sposob = action_map.get(action, (None, None))
 
-                # ШАГ 1: Выбираем вариант кредита
                 if value:
                     await page.evaluate(f"""
                         () => {{
@@ -77,10 +73,8 @@ async def get_rate_from_site(url, selector, action=None):
                             }}
                         }}
                     """)
-                    print(f"[DEBUG] Установил iscredit = {value}")
-                    await page.wait_for_timeout(2000)  # Ждём, пока JS перерисует радио-кнопки
+                    await page.wait_for_timeout(2000)
 
-                # ШАГ 2: Выбираем радио-кнопку (если нужна)
                 if sposob:
                     await page.evaluate(f"""
                         () => {{
@@ -91,14 +85,10 @@ async def get_rate_from_site(url, selector, action=None):
                             }}
                         }}
                     """)
-                    print(f"[DEBUG] Установил SPOSOB = {sposob}")
                     await page.wait_for_timeout(2000)
-
-                print(f"[DEBUG] Action выполнен")
 
             if selector.startswith("input#"):
                 value = await page.evaluate(f"document.querySelector('{selector}')?.value")
-                print(f"[DEBUG] input.value = {value}")
                 await browser.close()
                 return value if value else None
 
@@ -108,7 +98,6 @@ async def get_rate_from_site(url, selector, action=None):
             for el in elements:
                 text = await el.inner_text()
                 values.append(text.strip())
-            print(f"[DEBUG] Найдено элементов: {len(values)}")
             await browser.close()
             return ", ".join(values) if values else None
 
