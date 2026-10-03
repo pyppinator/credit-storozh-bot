@@ -98,7 +98,6 @@ async def get_rate_from_site(url, selector, action=None):
                     await page.wait_for_timeout(2000)
 
                 if radio_value:
-                    # Пробуем и SPOSOB, и SEND
                     await page.evaluate(f"""
                         () => {{
                             let radio = document.querySelector('input[name="SPOSOB"][value="{radio_value}"]');
@@ -118,12 +117,29 @@ async def get_rate_from_site(url, selector, action=None):
 
             # === ЧТЕНИЕ СТАВКИ ===
 
+            # МТБанк: «На мары»
+            if selector == "mtbank_na_mary":
+                value = await page.evaluate("""
+                    () => {
+                        const title = document.querySelector('.hero-banner__feature-title');
+                        const text = document.querySelector('.hero-banner__feature-text');
+                        const t = title ? title.innerText.trim() : null;
+                        const x = text ? text.innerText.trim() : null;
+                        return t || x ? `Грейс: ${t || '—'} | Основная: ${x || '—'}` : null;
+                    }
+                """)
+                print(f"[DEBUG] mtbank_na_mary = {value}")
+                await browser.close()
+                return value if value else None
+
+            # input#stavka
             if selector == "input#stavka":
                 value = await page.evaluate(f"document.querySelector('{selector}')?.value")
                 print(f"[DEBUG] input.value = {value}")
                 await browser.close()
                 return value if value else None
 
+            # .detail-banner__prop_title
             if selector == ".detail-banner__prop_title":
                 value = await page.evaluate(f"""
                     () => {{
@@ -135,6 +151,7 @@ async def get_rate_from_site(url, selector, action=None):
                 await browser.close()
                 return value if value else None
 
+            # Иначе — query_selector_all
             await page.wait_for_selector(selector, timeout=15000)
             elements = await page.query_selector_all(selector)
             values = []
