@@ -151,5 +151,45 @@ BELARUSBANK = {
                 },
             }
         },
+        "stroysberezheniya": {
+            "name": "🏦 Стройсбережения",
+            "products": {
+                "stroysber_vozvedenie_6": {
+                    "name": "Возведение (вклад с 01.10.2021)",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-zhilya-po-sisteme-stroysberezheniy/",
+                    "selector": "input#stavka",
+                    "action": "select_stroysber_vozvedenie_6"
+                },
+                "stroysber_vozvedenie_8": {
+                    "name": "Возведение (на общих основаниях)",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-zhilya-po-sisteme-stroysberezheniy/",
+                    "selector": "input#stavka",
+                    "action": "select_stroysber_vozvedenie_8"
+                },
+                "stroysber_priobretenie_6": {
+                    "name": "Приобретение (вклад с 01.10.2021)",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-priobretenie-zhilya-po-sisteme-stroysberezheniy/",
+                    "selector": "input#stavka",
+                    "action": "select_stroysber_priobretenie_6"
+                },
+                "stroysber_priobretenie_8": {
+                    "name": "Приобретение (на общих основаниях)",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-priobretenie-zhilya-po-sisteme-stroysberezheniy/",
+                    "selector": "input#stavka",
+                    "action": "select_stroysber_priobretenie_8"
+                },
+            }
+        },
+        "subsidiya": {
+            "name": "💰 Субсидия на погашение",
+            "products": {
+                "subsidiya_1": {
+                    "name": "Кредит с использованием субсидии",
+                    "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilykh-pomeshcheniy-s-ispolzovaniem-subsidii-na-ego-pogashenie/",
+                    "selector": ".detail-banner__prop_title",
+                    "action": None
+                },
+            }
+        },
     }
 }

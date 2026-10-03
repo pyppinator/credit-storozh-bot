@@ -29,6 +29,13 @@ ACTION_MAP = {
     "select_ekspress_102": ("102", "4"),
     "select_ekspress_103": ("103", "4"),
     "select_ekspress_104": ("104", "4"),
+    # Стройсбережения
+    "select_stroysber_vozvedenie_6": (None, "6"),
+    "select_stroysber_vozvedenie_8": (None, "8"),
+    "select_stroysber_priobretenie_6": (None, "6"),
+    "select_stroysber_priobretenie_8": (None, "8"),
+    # Субсидия (нет select и радио)
+    "select_subsidiya_1": (None, None),
 }
 
 # ============ ПОЛУЧЕНИЕ СТАВКИ ============
@@ -75,12 +82,23 @@ async def get_rate_from_site(url, selector, action=None):
 
                 print(f"[DEBUG] Action выполнен")
 
-            if selector.startswith("input#"):
+            # === ЧТЕНИЕ СТАВКИ ===
+
+            # Если селектор — это input#stavka
+            if selector == "input#stavka":
                 value = await page.evaluate(f"document.querySelector('{selector}')?.value")
                 print(f"[DEBUG] input.value = {value}")
                 await browser.close()
                 return value if value else None
 
+            # Если селектор — это .detail-banner__prop_title (для субсидии)
+            if selector == ".detail-banner__prop_title":
+                value = await page.evaluate(f"document.querySelector('{selector}')?.innerText")
+                print(f"[DEBUG] banner value = {value}")
+                await browser.close()
+                return value if value else None
+
+            # Иначе — ищем через query_selector_all (Технобанк)
             await page.wait_for_selector(selector, timeout=15000)
             elements = await page.query_selector_all(selector)
             values = []
