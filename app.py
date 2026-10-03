@@ -29,6 +29,7 @@ WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = "credit-storozh-secret-2026"
 
 RENDER_URL = "https://credit-storozh-bot.onrender.com"
+GITHUB_ACTIONS_URL = "https://github.com/pyppinator/credit-storozh-bot/actions/workflows/updater.yml"
 
 REFINANCE_URL = "https://www.gb.by/spravochniki/stavka-refinansirovaniya-natsionalnogo-b"
 REFINANCE_SELECTOR = "table tr:nth-child(2) td:nth-child(2)"
@@ -219,7 +220,6 @@ async def product_selected(callback: CallbackQuery):
         await callback.answer("⚠️ Ты уже подписан на этот кредит!", show_alert=True)
         return
 
-    # ЧИТАЕМ ИЗ БД — МГНОВЕННО!
     rate = get_rate_from_db(bank["name"], product["name"]) or "загружается..."
 
     add_subscription(
@@ -335,7 +335,9 @@ async def admin_panel(callback: CallbackQuery):
     last_update = get_last_update_time() or "никогда"
     await callback.message.edit_text(
         f"🔐 <b>Админ-панель</b>\n\n"
-        f"🕐 Последнее обновление ставок: <b>{last_update[:16].replace('T', ' ') if last_update != 'никогда' else 'никогда'}</b>",
+        f"🕐 Последнее обновление ставок: <b>{last_update[:16].replace('T', ' ') if last_update != 'никогда' else 'никогда'}</b>\n\n"
+        f"Обход ставок запускается <b>автоматически</b> на GitHub Actions каждый день в 3:00.\n"
+        f"Чтобы запустить вручную — нажми «🔄 Запустить обход на GitHub».",
         reply_markup=admin_menu(),
         parse_mode="HTML"
     )
@@ -346,21 +348,16 @@ async def admin_update_rates(callback: CallbackQuery):
         await callback.answer("⛔ Нет доступа", show_alert=True)
         return
     await callback.message.edit_text(
-        "📥 <b>Запускаю обновление ставок...</b>\n\n"
-        "Это может занять 5–15 минут. Я сообщу, когда закончу.",
-        parse_mode="HTML"
+        f"🔄 <b>Запуск обхода ставок</b>\n\n"
+        f"Обход запускается на <b>GitHub Actions</b> (не на Render).\n\n"
+        f"1. Перейди по ссылке: <a href=\"{GITHUB_ACTIONS_URL}\">GitHub Actions</a>\n"
+        f"2. Нажми <b>«Run workflow»</b>.\n"
+        f"3. Дождись завершения (2–3 минуты).\n\n"
+        f"После этого ставки обновятся.",
+        reply_markup=admin_menu(),
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
-    try:
-        from updater import update_all_rates
-        await update_all_rates()
-        await callback.message.answer(
-            "✅ <b>Обновление завершено!</b>\n\n"
-            "Проверь статистику.",
-            reply_markup=admin_menu(),
-            parse_mode="HTML"
-        )
-    except Exception as e:
-        await callback.message.answer(f"❌ Ошибка: {e}")
 
 @dp.callback_query(F.data == "admin_restart")
 async def admin_restart(callback: CallbackQuery):
@@ -372,7 +369,6 @@ async def admin_restart(callback: CallbackQuery):
         "Через 10–20 секунд я снова буду в сети.",
         parse_mode="HTML"
     )
-    # Перезапуск процесса
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
 @dp.callback_query(F.data == "admin_unsub_all")

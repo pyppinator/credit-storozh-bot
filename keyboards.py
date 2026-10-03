@@ -96,7 +96,7 @@ def refinance_menu():
 def admin_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика и подписки", callback_data="admin_subs")],
-        [InlineKeyboardButton(text="📥 Обновить все ставки", callback_data="admin_update_rates")],
+        [InlineKeyboardButton(text="🔄 Запустить обход на GitHub", callback_data="admin_update_rates")],
         [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="admin_restart")],
         [InlineKeyboardButton(text="❌ Отписаться от ВСЕХ", callback_data="admin_unsub_all")],
         [InlineKeyboardButton(text="🏠 В главное меню", callback_data="back_main")],
