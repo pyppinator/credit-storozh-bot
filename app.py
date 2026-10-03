@@ -68,7 +68,7 @@ async def get_rate_from_site(url, selector, action=None):
                 await page.select_option("select#iscredit", value="095")
 
             if action:
-                await page.wait_for_timeout(5000)  # Ждём 5 сек, чтобы JS обновил ставку
+                await page.wait_for_timeout(5000)
 
             await page.wait_for_selector(selector, timeout=20000)
             element = await page.query_selector(selector)
@@ -230,21 +230,26 @@ async def group_selected(callback: CallbackQuery):
 async def product_selected(callback: CallbackQuery):
     parts = callback.data.split("_")
     bank_id = parts[1]
-    prod_id = "_".join(parts[2:])
     bank = BANKS.get(bank_id)
     if not bank:
         await callback.answer("Ошибка")
         return
 
-    # Ищем продукт: либо напрямую, либо в группах
+    # Ищем продукт: сначала в группах, потом в обычных продуктах
     product = None
-    if "products" in bank and prod_id in bank["products"]:
-        product = bank["products"][prod_id]
-    elif "groups" in bank:
-        for group_id, group_data in bank["groups"].items():
-            if prod_id in group_data["products"]:
-                product = group_data["products"][prod_id]
-                break
+
+    if "groups" in bank:
+        # callback_data: prod_{bank_id}_{group_id}_{prod_id}
+        group_id = parts[2]
+        prod_id = "_".join(parts[3:])
+        group = bank["groups"].get(group_id)
+        if group:
+            product = group["products"].get(prod_id)
+
+    if not product and "products" in bank:
+        # callback_data: prod_{bank_id}_{prod_id}
+        prod_id = "_".join(parts[2:])
+        product = bank["products"].get(prod_id)
 
     if not product:
         await callback.answer("Кредит не найден")
