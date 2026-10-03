@@ -9,7 +9,7 @@ from aiohttp import web
 from playwright.async_api import async_playwright
 
 from keyboards import (
-    main_menu, banks_menu, products_menu,
+    main_menu, banks_menu, products_menu, groups_menu, group_products_menu,
     subscriptions_menu, unsubscribe_menu, refinance_menu,
     admin_menu, top_products_menu
 )
@@ -48,7 +48,6 @@ async def get_rate_from_site(url, selector, action=None):
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
-            # === Беларусбанк: выбор варианта ===
             if action == "select_ipoteka_24":
                 await page.select_option("select#iscredit", value="111")
             elif action == "select_ipoteka_12":
@@ -69,9 +68,9 @@ async def get_rate_from_site(url, selector, action=None):
                 await page.select_option("select#iscredit", value="095")
 
             if action:
-                await page.wait_for_timeout(2000)
+                await page.wait_for_timeout(5000)  # Ждём 5 сек, чтобы JS обновил ставку
 
-            await page.wait_for_selector(selector, timeout=15000)
+            await page.wait_for_selector(selector, timeout=20000)
             element = await page.query_selector(selector)
             if not element:
                 await browser.close()
@@ -102,18 +101,12 @@ async def daily_check():
             for bank, product in unique:
                 key = (bank, product)
                 if key not in PRODUCTS_MAP:
+                    print(f"Нет URL для {key}")
                     continue
-                url, selector = PRODUCTS_MAP[key]
-                # Ищем action в products.py
-                action = None
-                for bank_id, bank_data in BANKS.items():
-                    if bank_data["name"] == bank:
-                        for prod_id, prod_data in bank_data["products"].items():
-                            if prod_data["name"] == product:
-                                action = prod_data.get("action")
-                                break
+                url, selector, action = PRODUCTS_MAP[key]
                 new_rate = await get_rate_from_site(url, selector, action)
                 if not new_rate:
+                    print(f"Не удалось получить ставку для {key}")
                     continue
                 old_rate = get_current_rate(bank, product)
                 if old_rate != new_rate:
@@ -214,13 +207,45 @@ async def bank_selected(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
+@dp.callback_query(F.data.startswith("group_"))
+async def group_selected(callback: CallbackQuery):
+    parts = callback.data.split("_")
+    bank_id = parts[1]
+    group_id = "_".join(parts[2:])
+    bank = BANKS.get(bank_id)
+    if not bank or "groups" not in bank:
+        await callback.answer("Группа не найдена")
+        return
+    group = bank["groups"].get(group_id)
+    if not group:
+        await callback.answer("Группа не найдена")
+        return
+    await callback.message.edit_text(
+        f"💳 <b>{group['name']}</b>\n\nВыбери вариант:",
+        reply_markup=group_products_menu(bank_id, group_id),
+        parse_mode="HTML"
+    )
+
 @dp.callback_query(F.data.startswith("prod_"))
 async def product_selected(callback: CallbackQuery):
     parts = callback.data.split("_")
     bank_id = parts[1]
     prod_id = "_".join(parts[2:])
     bank = BANKS.get(bank_id)
-    product = bank["products"].get(prod_id) if bank else None
+    if not bank:
+        await callback.answer("Ошибка")
+        return
+
+    # Ищем продукт: либо напрямую, либо в группах
+    product = None
+    if "products" in bank and prod_id in bank["products"]:
+        product = bank["products"][prod_id]
+    elif "groups" in bank:
+        for group_id, group_data in bank["groups"].items():
+            if prod_id in group_data["products"]:
+                product = group_data["products"][prod_id]
+                break
+
     if not product:
         await callback.answer("Кредит не найден")
         return

@@ -2,7 +2,6 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from products import BANKS
 
 def main_menu(is_admin=False):
-    """Главное меню. Если is_admin=True — добавляет админ-кнопку."""
     buttons = [
         [InlineKeyboardButton(text="📋 Выбрать банк", callback_data="choose_bank")],
         [InlineKeyboardButton(text="📌 Мои подписки", callback_data="my_subs")],
@@ -22,13 +21,59 @@ def banks_menu():
     buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="back_main")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
+def groups_menu(bank_id):
+    """Меню групп продуктов (например, 'Ипотека с нами', 'Возведение')"""
+    bank = BANKS.get(bank_id)
+    if not bank or "groups" not in bank:
+        return None
+    buttons = []
+    for group_id, group_data in bank["groups"].items():
+        buttons.append([InlineKeyboardButton(
+            text=group_data["name"],
+            callback_data=f"group_{bank_id}_{group_id}"
+        )])
+    buttons.append([InlineKeyboardButton(text="📝 Нет моего кредита", callback_data="no_product")])
+    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="choose_bank")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def group_products_menu(bank_id, group_id):
+    """Меню продуктов внутри группы"""
+    bank = BANKS.get(bank_id)
+    if not bank or "groups" not in bank:
+        return None
+    group = bank["groups"].get(group_id)
+    if not group:
+        return None
+    buttons = []
+    for prod_id, prod_data in group["products"].items():
+        buttons.append([InlineKeyboardButton(
+            text=f"💳 {prod_data['name']}",
+            callback_data=f"prod_{bank_id}_{group_id}_{prod_id}"
+        )])
+    buttons.append([InlineKeyboardButton(text="📝 Нет моего кредита", callback_data="no_product")])
+    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"bank_{bank_id}")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
 def products_menu(bank_id):
+    """Меню продуктов (для банков без групп — например, Технобанк)"""
     bank = BANKS.get(bank_id)
     if not bank:
         return None
     buttons = []
-    for prod_id, prod_data in bank["products"].items():
-        buttons.append([InlineKeyboardButton(text=f"💳 {prod_data['name']}", callback_data=f"prod_{bank_id}_{prod_id}")])
+    if "groups" in bank:
+        # Если есть группы — показываем группы
+        for group_id, group_data in bank["groups"].items():
+            buttons.append([InlineKeyboardButton(
+                text=group_data["name"],
+                callback_data=f"group_{bank_id}_{group_id}"
+            )])
+    else:
+        # Если групп нет — показываем продукты напрямую
+        for prod_id, prod_data in bank["products"].items():
+            buttons.append([InlineKeyboardButton(
+                text=f"💳 {prod_data['name']}",
+                callback_data=f"prod_{bank_id}_{prod_id}"
+            )])
     buttons.append([InlineKeyboardButton(text="📝 Нет моего кредита", callback_data="no_product")])
     buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="choose_bank")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -62,7 +107,6 @@ def admin_menu():
     ])
 
 def top_products_menu():
-    """Меню для раздела «Популярные кредиты»"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🏠 В главное меню", callback_data="back_main")],
     ])
