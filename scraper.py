@@ -212,68 +212,80 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белгазпромбанк: строка «Размер процентов» → две ставки с подписями ===
+            # === Белгазпромбанк: ДЕБАЖ (временно) ===
             if selector == "belgazprombank_rates":
                 value = await page.evaluate("""
                     () => {
-                        // Находим td с фразой "Размер процентов за пользование кредитом"
+                        const out = [];
+                        const push = (label, val) => {
+                            out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
+                        };
+
+                        // A. Сколько вообще <td> на странице?
                         const tds = document.querySelectorAll('td');
-                        let targetTd = null;
-                        for (const td of tds) {
-                            const t = (td.innerText || '').toLowerCase();
-                            if (t.includes('размер процентов за пользование кредитом')) {
-                                targetTd = td;
+                        push('td_count', tds.length);
+
+                        // B. Есть ли <table>?
+                        const tables = document.querySelectorAll('table');
+                        push('table_count', tables.length);
+
+                        // C. Ищем любые ячейки, где встречается "процент" и "кредит"
+                        const hits = [];
+                        tds.forEach((td, i) => {
+                            const t = (td.innerText || '').trim();
+                            if (t.length > 0 && t.length < 200 && /процент/i.test(t) && /кредит/i.test(t)) {
+                                hits.push({ i: i, text: t.slice(0, 150) });
+                            }
+                        });
+                        push('percent_credit_tds_count', hits.length);
+                        hits.slice(0, 5).forEach((h, i) => push('hit_' + i, h.text));
+
+                        // D. Ищем сам блок с текстом про "0,000001%" или "12,8%"
+                        const all = document.querySelectorAll('*');
+                        let pctNode = null;
+                        let pctContext = null;
+                        for (const el of all) {
+                            if (el.children.length > 0) continue;
+                            const t = (el.innerText || '').trim();
+                            if (!t) continue;
+                            if (/0[.,]000001/.test(t) || /12[.,]8\\s*%/.test(t)) {
+                                pctNode = t.slice(0, 200);
+                                pctContext = el.tagName + '.' + (el.className || '');
                                 break;
                             }
                         }
-                        if (!targetTd) return null;
+                        push('pct_node', pctNode);
+                        push('pct_context', pctContext);
 
-                        // Соседний td справа = содержимое
-                        const nextTd = targetTd.nextElementSibling;
-                        if (!nextTd) return null;
-
-                        const text = (nextTd.innerText || '').replace(/\\u00a0/g, ' ');
-                        if (!text) return null;
-
-                        // 1. Первая ставка — после "первых NNN календарных дней"
-                        // 2. Вторая ставка — после "с NNN календарного дня"
-                        const firstMatch = text.match(/первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–-]\\s*([\\d.,]+)\\s*%/i);
-                        const secondMatch = text.match(/(?:начиная\\s+)?с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–-]\\s*([\\d.,]+)\\s*%/i);
-
-                        const results = [];
-
-                        if (firstMatch) {
-                            const days = firstMatch[1];
-                            const val = firstMatch[2].replace(',', '.') + '%';
-                            results.push(val + ' (' + days + ' дн.)');
-                        }
-
-                        if (secondMatch) {
-                            const val = secondMatch[2].replace(',', '.') + '%';
-                            results.push(val + ' (далее)');
-                        }
-
-                        // Если хотя бы одна ставка не нашлась через фразу — fallback:
-                        // берём все X% в порядке появления, первую подписываем "180 дн.", вторую "далее"
-                        if (results.length === 0) {
-                            const all = text.match(/([\\d.,]+)\\s*%/g) || [];
-                            const uniq = [];
-                            all.forEach(m => {
-                                const v = m.replace(',', '.').replace(/\\s/g, '').trim();
-                                if (!uniq.includes(v)) uniq.push(v);
-                            });
-                            if (uniq.length >= 2) {
-                                results.push(uniq[0] + ' (180 дн.)');
-                                results.push(uniq[1] + ' (далее)');
-                            } else if (uniq.length === 1) {
-                                results.push(uniq[0] + ' (далее)');
+                        // E. Есть ли строка целиком "В течение первых 180 календарных дней"?
+                        const reFirst = /В\\s+течение\\s+первых\\s+180\\s+календарных\\s+дней/i;
+                        let firstNode = null;
+                        for (const el of all) {
+                            if (el.children.length > 0) continue;
+                            const t = (el.innerText || '').trim();
+                            if (reFirst.test(t)) {
+                                firstNode = t.slice(0, 250);
+                                break;
                             }
                         }
+                        push('first_180_days_node', firstNode);
 
-                        return results.length ? results.join(' / ') : null;
+                        // F. Может, там вообще не <td>, а <div>? — ищем любые элементы с "Размер процентов"
+                        const reTd = /размер\\s+процентов/i;
+                        const nodesWithPhrase = [];
+                        all.forEach(el => {
+                            const t = (el.innerText || '').trim();
+                            if (t.length < 200 && reTd.test(t)) {
+                                nodesWithPhrase.push({ tag: el.tagName, cls: el.className || '', text: t.slice(0, 100) });
+                            }
+                        });
+                        push('razmer_proc_count', nodesWithPhrase.length);
+                        nodesWithPhrase.slice(0, 5).forEach((n, i) => push('rp_' + i, n.tag + ' | ' + n.cls + ' | ' + n.text));
+
+                        return out.join('\\n');
                     }
                 """)
-                print(f"[DEBUG] belgazprombank_rates = {value}")
+                print(f"[DEBUG] belgazprombank_rates:\n{value}")
                 await browser.close()
                 return value if value else None
 
