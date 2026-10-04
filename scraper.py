@@ -240,68 +240,61 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: по трём конкретным <td> ===
+            # === Белагропромбанк: тупо собираем ВСЕ % со страницы ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
-                        // Возвращает ПЕРВОЕ "X,X%" из строки, либо null
-                        const firstRate = (s) => {
-                            if (!s) return null;
-                            const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
-                            return m ? m[1].replace(',', '.') + '%' : null;
-                        };
+                        const results = [];
 
-                        let mainRate = null;   // 13,9%
-                        let graceRate = null;  // 7%
+                        // 1. Идём по всем <li> — там лежат ставки (и в таблице, и в списке)
+                        const lis = document.querySelectorAll('li');
+                        for (const li of lis) {
+                            const t = (li.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                            if (!t) continue;
+                            if (t.length > 100) continue;
 
-                        const tds = document.querySelectorAll('td');
-                        for (const td of tds) {
-                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                            if (t.length > 200) continue;
-
-                            const next = td.nextElementSibling;
-                            if (!next) continue;
-                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
-
-                            // Основная ставка
-                            if (t.indexOf('Процентная ставка по кредитному договору') !== -1) {
-                                if (!mainRate) {
-                                    mainRate = firstRate(nextText);
-                                }
+                            // Ищем X,X% в тексте <li>
+                            const m = t.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
+                            if (m) {
+                                const val = m[1].replace(',', '.') + '%';
+                                if (!results.includes(val)) results.push(val);
                             }
+                            if (results.length >= 3) break;
+                        }
 
-                            // Грейс: текст <td> содержит "Грейс-период" И в соседе есть %
-                            // (у "Срок действия грейс-периода" сосед = "120 дней", там % НЕТ → отсеется)
-                            if (t.indexOf('Грейс-период') !== -1) {
-                                const r = firstRate(nextText);
-                                if (r && !graceRate) {
-                                    graceRate = r;
+                        // 2. Если не нашли в <li> — идём по всем <td> и собираем %
+                        if (results.length === 0) {
+                            const tds = document.querySelectorAll('td');
+                            for (const td of tds) {
+                                const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                                if (!t) continue;
+                                if (t.length > 200) continue;
+                                const m = t.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
+                                if (m) {
+                                    const val = m[1].replace(',', '.') + '%';
+                                    if (!results.includes(val)) results.push(val);
                                 }
+                                if (results.length >= 3) break;
                             }
                         }
 
-                        // Если хоть что-то нашли — собираем
-                        if (mainRate || graceRate) {
-                            const parts = [];
-                            if (graceRate) parts.push('Грейс-период ' + graceRate);
-                            if (mainRate) parts.push(mainRate);
-                            return parts.join('; ');
+                        // 3. Если всё ещё пусто — идём по <span>
+                        if (results.length === 0) {
+                            const spans = document.querySelectorAll('span');
+                            for (const sp of spans) {
+                                const t = (sp.innerText || '').trim();
+                                if (!t) continue;
+                                if (t.length > 50) continue;
+                                const m = t.match(/^(\\d{1,2}[.,]\\d{1,2})\\s*%$/);
+                                if (m) {
+                                    const val = m[1].replace(',', '.') + '%';
+                                    if (!results.includes(val)) results.push(val);
+                                }
+                                if (results.length >= 3) break;
+                            }
                         }
 
-                        // Fallback — <li class="page-head__list-item"> с "Процентная ставка"
-                        const items = document.querySelectorAll('li.page-head__list-item');
-                        for (const li of items) {
-                            const nameEl = li.querySelector('.page-head__list-name');
-                            if (!nameEl) continue;
-                            const name = (nameEl.innerText || '').trim().toLowerCase();
-                            if (name.indexOf('процентная ставка') === -1) continue;
-                            const valEl = li.querySelector('.page-head__list-val');
-                            if (!valEl) continue;
-                            const r = firstRate(valEl.innerText || '');
-                            if (r) return r;
-                        }
-
-                        return null;
+                        return results.length ? results.join('; ') : null;
                     }
                 """)
                 print(f"[DEBUG] belapb_rates = {value}")
