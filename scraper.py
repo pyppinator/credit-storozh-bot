@@ -149,54 +149,69 @@ async def get_rate_from_site(url, selector, action=None):
                 await browser.close()
                 return value if value else None
 
-            # === Приорбанк: недвижимость — ДЕБАЖ (временно) ===
+            # === Приорбанк: недвижимость — 2 ставки (грейс + далее) ===
             if selector == "priorbank_banner_bold":
                 value = await page.evaluate("""
                     () => {
-                        const out = [];
-                        const push = (label, val) => {
-                            out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
+                        const parseRate = (s) => {
+                            if (!s) return null;
+                            const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
+                            if (!m) return null;
+                            return m[1].replace(',', '.') + '%';
                         };
 
-                        // A. Все .banner-content_big-bold на странице
+                        let first = null;
+                        let second = null;
+
+                        // 1. Первая ставка — первый .banner-content_big-bold, содержащий %
                         const bolds = document.querySelectorAll('.banner-content_big-bold');
-                        push('bolds_count', bolds.length);
-                        bolds.forEach((el, i) => push('bold_' + i, el.innerText.trim()));
-
-                        // B. .banner-content__title
-                        const title = document.querySelector('.banner-content__title');
-                        push('title_text', title ? title.innerText.trim() : null);
-
-                        // C. .banner-content__descr
-                        const descr = document.querySelector('.banner-content__descr');
-                        push('descr_text', descr ? descr.innerText.trim() : null);
-
-                        // D. Все элементы с data-tooltip-text (короткие, релевантные)
-                        const tips = document.querySelectorAll('[data-tooltip-text]');
-                        push('tooltips_count', tips.length);
-                        tips.forEach((el, i) => {
-                            const t = el.getAttribute('data-tooltip-text') || '';
-                            if (t.length < 200) push('tip_' + i, t);
-                        });
-
-                        // E. Текст рядом со словами "первые", "далее"
-                        const all = document.querySelectorAll('p, div, span, li');
-                        const around = [];
-                        all.forEach(el => {
-                            if (el.children.length > 0) return;
+                        for (const el of bolds) {
                             const t = (el.innerText || '').trim();
-                            if (!t) return;
-                            if (/первые|далее|первых/i.test(t) || /годовых/i.test(t)) {
-                                if (t.length < 120) around.push(t);
+                            if (t.includes('%')) {
+                                first = parseRate(t);
+                                if (first) break;
                             }
-                        });
-                        push('around_count', around.length);
-                        around.slice(0, 10).forEach((t, i) => push('around_' + i, t));
+                        }
 
-                        return out.join('\\n');
+                        // 2. Вторая ставка — из data-tooltip-text с фразой "Далее применяется ставка"
+                        const tips = document.querySelectorAll('[data-tooltip-text]');
+                        for (const el of tips) {
+                            const txt = el.getAttribute('data-tooltip-text') || '';
+                            if (/Далее\\s+применяется\\s+ставка/i.test(txt)) {
+                                second = parseRate(txt);
+                                if (second) break;
+                            }
+                        }
+
+                        // 3. Fallback — ищем вторую ставку в блоке «Условия кредита»
+                        if (!second) {
+                            const nodes = document.querySelectorAll('p, div, span, li');
+                            const candidates = [];
+                            nodes.forEach(el => {
+                                if (el.children.length > 0) return;
+                                const t = (el.innerText || '').trim();
+                                const m = t.match(/^(\\d{1,2}[.,]\\d{1,2})\\s*%\\s*годовых$/i);
+                                if (m) {
+                                    const num = parseFloat(m[1].replace(',', '.'));
+                                    if (num >= 5 && num <= 40) {
+                                        candidates.push(m[1].replace(',', '.') + '%');
+                                    }
+                                }
+                            });
+                            const uniq = [];
+                            candidates.forEach(v => { if (!uniq.includes(v)) uniq.push(v); });
+                            if (uniq.length >= 2) second = uniq[1];
+                            else if (uniq.length === 1 && uniq[0] !== first) second = uniq[0];
+                        }
+
+                        const result = [];
+                        if (first) result.push(first);
+                        if (second && second !== first) result.push(second);
+
+                        return result.length ? result.join(' / ') : null;
                     }
                 """)
-                print(f"[DEBUG] priorbank_banner_bold:\n{value}")
+                print(f"[DEBUG] priorbank_banner_bold = {value}")
                 await browser.close()
                 return value if value else None
 
