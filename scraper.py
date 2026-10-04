@@ -240,68 +240,71 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: финальный ===
+            # === Белагропромбанк: через <li class="page-head__list-item"> ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
-                        const getPercent = (s) => {
-                            if (!s) return null;
-                            const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
-                            return m ? m[1].replace(',', '.') + '%' : null;
-                        };
+                        const results = [];
 
-                        let mainRate = null;
-                        let graceRate = null;
-
-                        // По всем <td>: ищем пару "заголовок → сосед"
-                        const tds = document.querySelectorAll('td');
-                        for (const td of tds) {
-                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                            if (!t || t.length > 200) continue;
-
-                            const next = td.nextElementSibling;
-                            if (!next) continue;
-                            const nextText = next.innerText || '';
-
-                            if (t.indexOf('Процентная ставка по кредитному договору') !== -1 && !mainRate) {
-                                mainRate = getPercent(nextText);
-                            }
-                            if (t.indexOf('Грейс-период') !== -1 && !graceRate) {
-                                const r = getPercent(nextText);
-                                if (r) graceRate = r;
-                            }
-                        }
-
-                        // Отдаём: сначала грейс, потом основная
-                        if (mainRate || graceRate) {
-                            const parts = [];
-                            if (graceRate) parts.push(graceRate);
-                            if (mainRate) parts.push(mainRate);
-                            return parts.join('; ');
-                        }
-
-                        // Fallback 1: <li class="page-head__list-item">
+                        // 1. Главный заход: <li class="page-head__list-item"> → "Процентная ставка"
                         const items = document.querySelectorAll('li.page-head__list-item');
                         for (const li of items) {
                             const nameEl = li.querySelector('.page-head__list-name');
                             if (!nameEl) continue;
-                            if (nameEl.innerText.toLowerCase().indexOf('процентная ставка') === -1) continue;
+                            const name = (nameEl.innerText || '').trim().toLowerCase();
+                            if (name.indexOf('процентная ставка') === -1) continue;
+
                             const valEl = li.querySelector('.page-head__list-val');
                             if (!valEl) continue;
-                            const r = getPercent(valEl.innerText || '');
-                            if (r) return r;
+                            const valText = (valEl.innerText || '').replace(/\\u00a0/g, ' ').trim();
+
+                            // Вытаскиваем ВСЕ X,X% из значения
+                            const re = /(\\d{1,2}[.,]\\d{1,2})\\s*%/g;
+                            let m;
+                            while ((m = re.exec(valText)) !== null) {
+                                const v = m[1].replace(',', '.') + '%';
+                                if (!results.includes(v)) results.push(v);
+                            }
+                            break;
                         }
 
-                        // Fallback 2: <span class="credit-info__list-val">
-                        const creditVals = document.querySelectorAll('.credit-info__list-val');
-                        for (const cv of creditVals) {
-                            const t = (cv.innerText || '').trim();
-                            if (t.toLowerCase().indexOf('процентная ставка') === -1) continue;
-                            const r = getPercent(t);
-                            if (r) return r;
+                        // 2. Fallback: <span class="credit-info__list-val"> с "Процентная ставка"
+                        if (results.length === 0) {
+                            const creditVals = document.querySelectorAll('.credit-info__list-val');
+                            for (const cv of creditVals) {
+                                const t = (cv.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                                if (t.toLowerCase().indexOf('процентная ставка') === -1) continue;
+                                const re = /(\\d{1,2}[.,]\\d{1,2})\\s*%/g;
+                                let m;
+                                while ((m = re.exec(t)) !== null) {
+                                    const v = m[1].replace(',', '.') + '%';
+                                    if (!results.includes(v)) results.push(v);
+                                }
+                            }
                         }
 
-                        return null;
+                        // 3. Крайний fallback: <td> "Процентная ставка по кредитному договору" + "Грейс-период"
+                        if (results.length === 0) {
+                            let mainRate = null;
+                            let graceRate = null;
+                            const tds = document.querySelectorAll('td');
+                            for (const td of tds) {
+                                const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                                if (!t || t.length > 200) continue;
+                                const next = td.nextElementSibling;
+                                if (!next) continue;
+                                const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
+                                const mm = nextText.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
+                                const r = mm ? mm[1].replace(',', '.') + '%' : null;
+                                if (!r) continue;
+                                if (t.indexOf('Процентная ставка по кредитному договору') !== -1 && !mainRate) mainRate = r;
+                                if (t.indexOf('Грейс-период') !== -1 && !graceRate) graceRate = r;
+                            }
+                            if (graceRate) results.push(graceRate);
+                            if (mainRate && !results.includes(mainRate)) results.push(mainRate);
+                        }
+
+                        return results.length ? results.join('; ') : null;
                     }
                 """)
                 print(f"[DEBUG] belapb_rates = {value}")
