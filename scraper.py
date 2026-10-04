@@ -79,7 +79,6 @@ async def block_resources(route):
 
 async def get_rate_from_site(url, selector, action=None, column_index=None):
     async with async_playwright() as p:
-        # Анти-бот защита
         browser = await p.chromium.launch(
             headless=True,
             args=[
@@ -121,13 +120,11 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
             await page.wait_for_timeout(3000)
 
-            # Анти-бот детектор
             title = await page.title()
             if "verification" in title.lower() or "проверка" in title.lower():
-                print(f"[ANTIBOT] Белгазпромбанк вернул страницу Verification. title={title}")
+                print(f"[ANTIBOT] title={title}")
                 await page.wait_for_timeout(5000)
                 title2 = await page.title()
-                print(f"[ANTIBOT] повторная проверка title={title2}")
                 if "verification" in title2.lower() or "проверка" in title2.lower():
                     await browser.close()
                     return None
@@ -255,7 +252,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белгазпромбанк: все пары «первых N – [от] X%» / «с N – [от] Y%» ===
+            # === Белгазпромбанк ===
             if selector == "belgazprombank_rates":
                 value = await page.evaluate("""
                     () => {
@@ -322,81 +319,83 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: таблица + список ===
+            # === Белагропромбанк: ДЕБАЖ ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
-                        const results = [];
-
-                        const parseRate = (s) => {
-                            if (!s) return null;
-                            const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
-                            if (!m) return null;
-                            return m[1].replace(',', '.') + '%';
+                        const out = [];
+                        const push = (label, val) => {
+                            out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
                         };
 
-                        // 1. Таблица: ищем строку "Процентная ставка по кредитному договору"
+                        push('page_title', document.title);
+                        push('body_has_23', /23\\s*%/.test(document.body.innerText || ''));
+                        push('body_has_7', /7\\s*%/.test(document.body.innerText || ''));
+                        push('body_has_greis', /грейс/i.test(document.body.innerText || ''));
+
+                        // Все <td> с "процент" или "грейс"
                         const tds = document.querySelectorAll('td');
+                        push('td_count', tds.length);
+                        let idx = 0;
                         for (const td of tds) {
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                            if (!/процент|грейс/i.test(t)) continue;
                             if (t.length > 200) continue;
-                            if (!/процентная\\s+ставка\\s+по\\s+кредитному\\s+договору/i.test(t)) continue;
-
+                            push('td_' + idx, t.slice(0, 100));
                             const next = td.nextElementSibling;
-                            if (!next) continue;
-                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
-                            const r = parseRate(nextText);
-                            if (r && !results.includes(r)) {
-                                results.push(r);
-                                break;
-                            }
+                            push('td_' + idx + '_next', next ? (next.innerText || '').slice(0, 100) : 'NULL');
+                            idx++;
+                            if (idx >= 5) break;
                         }
+                        push('percent_td_hits', idx);
 
-                        // 2. Таблица: ищем "Грейс-период N дней" → подпись (грейс N дн.)
-                        for (const td of tds) {
-                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                        // Все <li> с "процент"
+                        const lis = document.querySelectorAll('li');
+                        push('li_count', lis.length);
+                        let idx2 = 0;
+                        for (const li of lis) {
+                            const t = (li.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                            if (!/процент/i.test(t)) continue;
                             if (t.length > 200) continue;
-                            if (!/грейс-период/i.test(t)) continue;
-
-                            const daysMatch = t.match(/(\\d{1,4})\\s*дн/i);
-                            const days = daysMatch ? daysMatch[1] : '';
-
-                            const next = td.nextElementSibling;
-                            if (!next) continue;
-                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
-                            const r = parseRate(nextText);
-                            if (r) {
-                                const item = r + (days ? ' (грейс ' + days + ' дн.)' : ' (грейс)');
-                                if (!results.includes(item)) results.push(item);
-                                break;
-                            }
+                            push('li_' + idx2, t.slice(0, 100));
+                            push('li_' + idx2 + '_class', li.className || '');
+                            idx2++;
+                            if (idx2 >= 5) break;
                         }
+                        push('percent_li_hits', idx2);
 
-                        // 3. Список: <li class="page-head__list-item"> с "Процентная ставка"
-                        if (results.length === 0) {
-                            const items = document.querySelectorAll('li.page-head__list-item');
-                            for (const li of items) {
-                                const nameEl = li.querySelector('.page-head__list-name');
-                                const valEl = li.querySelector('.page-head__list-val');
-                                if (!nameEl || !valEl) continue;
-                                const name = (nameEl.innerText || '').trim().toLowerCase();
-                                if (!name.includes('процентная ставка')) continue;
-                                const r = parseRate(valEl.innerText || '');
-                                if (r && !results.includes(r)) {
-                                    results.push(r);
-                                    break;
-                                }
-                            }
+                        // Ищем page-head__list-val
+                        const vals = document.querySelectorAll('.page-head__list-val');
+                        push('page_head_val_count', vals.length);
+                        vals.forEach((v, i) => push('phv_' + i, (v.innerText || '').slice(0, 100)));
+
+                        // Ищем page-head__list-item
+                        const items = document.querySelectorAll('.page-head__list-item');
+                        push('page_head_item_count', items.length);
+                        items.forEach((it, i) => push('phi_' + i, (it.innerText || '').slice(0, 150)));
+
+                        // Все <span> с 23% или 7%
+                        const spans = document.querySelectorAll('span');
+                        let idx3 = 0;
+                        for (const sp of spans) {
+                            const t = (sp.innerText || '').trim();
+                            if (!/^(23|7)\\s*%$/.test(t)) continue;
+                            push('span_' + idx3, t);
+                            push('span_' + idx3 + '_class', sp.className || '');
+                            const par = sp.parentElement;
+                            push('span_' + idx3 + '_parent', par ? par.tagName + '.' + (par.className || '') : 'NULL');
+                            idx3++;
                         }
+                        push('span_hits', idx3);
 
-                        return results.length ? results.join(' / ') : null;
+                        return out.join('\\n');
                     }
                 """)
-                print(f"[DEBUG] belapb_rates = {value}")
+                print(f"[DEBUG] belapb_rates:\n{value}")
                 await browser.close()
                 return value if value else None
 
-            # === Альфа-Банк: потребительский кредит (хитрый поиск) ===
+            # === Альфа-Банк: потребительский кредит ===
             if selector == "alfabank_cash_rate":
                 value = await page.evaluate("""
                     () => {
@@ -438,7 +437,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Альфа-Банк: фиксированная ставка из блока-фичи ===
+            # === Альфа-Банк: фиксированная ставка ===
             if selector == "alfabank_fixed_rate":
                 value = await page.evaluate("""
                     () => {
@@ -469,7 +468,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Альфа-Банк: таблица с колонками (кредит на авто) ===
+            # === Альфа-Банк: таблица с колонками ===
             if selector == "alfabank_auto_table":
                 value = await page.evaluate(f"""
                     () => {{
