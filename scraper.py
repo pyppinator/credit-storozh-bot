@@ -244,6 +244,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 return value if value else None
 
             # === Альфа-Банк: таблица с колонками (кредит на авто) ===
+            # Работает для всех 4 групп дилеров — отличается только column_index (1..4)
             if selector == "alfabank_auto_table":
                 value = await page.evaluate(f"""
                     () => {{
@@ -262,17 +263,31 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                                 const target = cells[colIdx];
                                 const text = (target.innerText || '').replace(/\\u00a0/g, ' ');
 
-                                // все X,XX% или X.XX%
-                                const matches = text.match(/(\\d{{1,2}}[.,]\\d{{1,2}})\\s*%/g);
-                                if (!matches) return null;
+                                const lines = text.split(/\\n+/).map(s => s.trim()).filter(Boolean);
 
-                                const uniq = [];
-                                matches.forEach(mm => {{
-                                    const v = mm.replace(',', '.').replace(/\\s/g, '').trim();
-                                    if (!uniq.includes(v)) uniq.push(v);
-                                }});
+                                const results = [];
 
-                                return uniq.length ? uniq.join(' / ') : null;
+                                for (const line of lines) {{
+                                    const isAfter = /по\\s+истечении/i.test(line);
+
+                                    // "X,XX" или "X,XX%" + необязательно "(N месяцев)"
+                                    const re = /(\\d{{1,2}}[.,]\\d{{1,2}})\\s*%?\\s*(?:\\((\\d{{1,3}})\\s*мес[^)]*\\))?/g;
+                                    let m;
+                                    while ((m = re.exec(line)) !== null) {{
+                                        const val = m[1].replace(',', '.') + '%';
+                                        const months = m[2];
+
+                                        let label;
+                                        if (isAfter) label = ' (далее)';
+                                        else if (months) label = ` (${{months}} мес.)`;
+                                        else label = '';
+
+                                        const item = val + label;
+                                        if (!results.includes(item)) results.push(item);
+                                    }}
+                                }}
+
+                                return results.length ? results.join(' / ') : null;
                             }}
                         }}
                         return null;
