@@ -189,7 +189,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Приорбанк: недвижимость — 2 ставки (грейс + далее) ===
+            # === Приорбанк: недвижимость ===
             if selector == "priorbank_banner_bold":
                 value = await page.evaluate("""
                     () => {
@@ -319,83 +319,83 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: ДЕБАЖ ===
+            # === Белагропромбанк: финальный селектор ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
-                        const out = [];
-                        const push = (label, val) => {
-                            out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
+                        const results = [];
+
+                        const parseRate = (s) => {
+                            if (!s) return null;
+                            const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
+                            if (!m) return null;
+                            return m[1].replace(',', '.') + '%';
                         };
 
-                        push('page_title', document.title);
-                        push('body_has_23', /23\\s*%/.test(document.body.innerText || ''));
-                        push('body_has_7', /7\\s*%/.test(document.body.innerText || ''));
-                        push('body_has_greis', /грейс/i.test(document.body.innerText || ''));
-
-                        // Все <td> с "процент" или "грейс"
+                        // 1. Основная ставка из таблицы: "Процентная ставка по кредитному договору"
                         const tds = document.querySelectorAll('td');
-                        push('td_count', tds.length);
-                        let idx = 0;
                         for (const td of tds) {
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                            if (!/процент|грейс/i.test(t)) continue;
                             if (t.length > 200) continue;
-                            push('td_' + idx, t.slice(0, 100));
+                            if (!/процентная\\s+ставка\\s+по\\s+кредитному\\s+договору/i.test(t)) continue;
+
                             const next = td.nextElementSibling;
-                            push('td_' + idx + '_next', next ? (next.innerText || '').slice(0, 100) : 'NULL');
-                            idx++;
-                            if (idx >= 5) break;
+                            if (!next) continue;
+                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
+                            const r = parseRate(nextText);
+                            if (r && !results.includes(r)) {
+                                results.push(r);
+                                break;
+                            }
                         }
-                        push('percent_td_hits', idx);
 
-                        // Все <li> с "процент"
-                        const lis = document.querySelectorAll('li');
-                        push('li_count', lis.length);
-                        let idx2 = 0;
-                        for (const li of lis) {
-                            const t = (li.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                            if (!/процент/i.test(t)) continue;
+                        // 2. Если таблицы нет — ищем в <li class="page-head__list-item"> по "Процентная ставка"
+                        if (results.length === 0) {
+                            const items = document.querySelectorAll('li.page-head__list-item');
+                            for (const li of items) {
+                                const nameEl = li.querySelector('.page-head__list-name');
+                                const valEl = li.querySelector('.page-head__list-val');
+                                if (!nameEl || !valEl) continue;
+                                const name = (nameEl.innerText || '').trim().toLowerCase();
+                                if (!name.includes('процентная ставка')) continue;
+                                const r = parseRate(valEl.innerText || '');
+                                if (r && !results.includes(r)) {
+                                    results.push(r);
+                                    break;
+                                }
+                            }
+                        }
+
+                        // 3. Грейс-период (если есть в таблице)
+                        for (const td of tds) {
+                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
                             if (t.length > 200) continue;
-                            push('li_' + idx2, t.slice(0, 100));
-                            push('li_' + idx2 + '_class', li.className || '');
-                            idx2++;
-                            if (idx2 >= 5) break;
+                            if (!/грейс-период/i.test(t)) continue;
+
+                            const daysMatch = t.match(/(\\d{1,4})\\s*дн/i);
+                            const days = daysMatch ? daysMatch[1] : '';
+
+                            const next = td.nextElementSibling;
+                            if (!next) continue;
+                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
+                            const r = parseRate(nextText);
+                            if (r) {
+                                const item = r + (days ? ' (грейс ' + days + ' дн.)' : ' (грейс)');
+                                if (!results.includes(item) && !results.includes(r)) {
+                                    results.push(item);
+                                }
+                                break;
+                            }
                         }
-                        push('percent_li_hits', idx2);
 
-                        // Ищем page-head__list-val
-                        const vals = document.querySelectorAll('.page-head__list-val');
-                        push('page_head_val_count', vals.length);
-                        vals.forEach((v, i) => push('phv_' + i, (v.innerText || '').slice(0, 100)));
-
-                        // Ищем page-head__list-item
-                        const items = document.querySelectorAll('.page-head__list-item');
-                        push('page_head_item_count', items.length);
-                        items.forEach((it, i) => push('phi_' + i, (it.innerText || '').slice(0, 150)));
-
-                        // Все <span> с 23% или 7%
-                        const spans = document.querySelectorAll('span');
-                        let idx3 = 0;
-                        for (const sp of spans) {
-                            const t = (sp.innerText || '').trim();
-                            if (!/^(23|7)\\s*%$/.test(t)) continue;
-                            push('span_' + idx3, t);
-                            push('span_' + idx3 + '_class', sp.className || '');
-                            const par = sp.parentElement;
-                            push('span_' + idx3 + '_parent', par ? par.tagName + '.' + (par.className || '') : 'NULL');
-                            idx3++;
-                        }
-                        push('span_hits', idx3);
-
-                        return out.join('\\n');
+                        return results.length ? results.join(' / ') : null;
                     }
                 """)
-                print(f"[DEBUG] belapb_rates:\n{value}")
+                print(f"[DEBUG] belapb_rates = {value}")
                 await browser.close()
                 return value if value else None
 
-            # === Альфа-Банк: потребительский кредит ===
+            # === Альфа-Банк: cash ===
             if selector == "alfabank_cash_rate":
                 value = await page.evaluate("""
                     () => {
@@ -437,7 +437,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Альфа-Банк: фиксированная ставка ===
+            # === Альфа-Банк: fixed rate ===
             if selector == "alfabank_fixed_rate":
                 value = await page.evaluate("""
                     () => {
@@ -468,7 +468,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Альфа-Банк: таблица с колонками ===
+            # === Альфа-Банк: auto table ===
             if selector == "alfabank_auto_table":
                 value = await page.evaluate(f"""
                     () => {{
