@@ -149,40 +149,66 @@ async def get_rate_from_site(url, selector, action=None):
                 await browser.close()
                 return value if value else None
 
-            # === Приорбанк: ставки со страниц недвижимости (баннер + тултип + условия) ===
+            # === Приорбанк: недвижимость — берём строго 2 ставки: баннер + тултип ===
             if selector == "priorbank_banner_bold":
                 value = await page.evaluate("""
                     () => {
-                        const results = [];
+                        const parseRate = (s) => {
+                            if (!s) return null;
+                            const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
+                            if (!m) return null;
+                            return m[1].replace(',', '.') + '%';
+                        };
 
-                        // 1. Основная ставка из баннера
-                        const bannerEl = document.querySelector('.banner-content_big-bold');
-                        if (bannerEl) {
-                            const t = bannerEl.innerText.trim();
-                            if (t && t.includes('%')) results.push(t);
+                        let first = null;   // ставка из баннера
+                        let second = null;  // ставка из тултипа или условий
+
+                        // 1. СТАВКА №1: .banner-content__title .banner-content_big-bold
+                        const titleEl = document.querySelector('.banner-content__title .banner-content_big-bold');
+                        if (titleEl) first = parseRate(titleEl.innerText);
+
+                        // 2. СТАВКА №2 (приоритет — тултип внутри баннера):
+                        //    ищем <u> внутри .banner-content__descr, у которого или родителя есть data-tooltip-text
+                        const descrU = document.querySelector('.banner-content__descr u');
+                        if (descrU) {
+                            // тултип может быть на самом <u> или на его обёртке
+                            let tipText = descrU.getAttribute('data-tooltip-text');
+                            if (!tipText) {
+                                const span = descrU.closest('[data-tooltip-text]');
+                                if (span) tipText = span.getAttribute('data-tooltip-text');
+                            }
+                            if (!tipText) {
+                                const parent = descrU.parentElement;
+                                if (parent) tipText = parent.getAttribute('data-tooltip-text');
+                            }
+                            if (tipText) second = parseRate(tipText);
                         }
 
-                        // 2. Дополнительные ставки из data-tooltip-text
-                        document.querySelectorAll('[data-tooltip-text]').forEach(el => {
-                            const txt = el.getAttribute('data-tooltip-text') || '';
-                            const matches = txt.match(/\\d+[.,]\\d+\\s*%/g);
-                            if (matches) matches.forEach(m => results.push(m.replace('\\s', '')));
-                        });
+                        // 3. Если тултип не нашёлся — берём вторую ставку из блока «Условия кредита»
+                        if (!second) {
+                            const nodes = document.querySelectorAll('p, div, span');
+                            const candidates = [];
+                            nodes.forEach(el => {
+                                if (el.children.length > 0) return;
+                                const t = (el.innerText || '').trim();
+                                const m = t.match(/^(\\d{1,2}[.,]\\d{1,2})\\s*%\\s*годовых$/i);
+                                if (m) {
+                                    const num = parseFloat(m[1].replace(',', '.'));
+                                    if (num >= 5 && num <= 40) {
+                                        candidates.push(m[1].replace(',', '.') + '%');
+                                    }
+                                }
+                            });
+                            // второй кандидат — это ставка "далее"
+                            if (candidates.length >= 2) second = candidates[1];
+                        }
 
-                        // 3. Ставки из блока «Условия кредита» (текстом)
-                        document.querySelectorAll('p, span, div').forEach(el => {
-                            if (el.children.length > 0) return;
-                            const t = el.innerText ? el.innerText.trim() : '';
-                            if (!t) return;
-                            const m = t.match(/^(\\d+[.,]\\d+)\\s*%\\s*годовых$/);
-                            if (m) results.push(m[1] + '%');
-                        });
+                        // 4. Собираем результат: сначала первая, потом вторая (если есть и не дубликат)
+                        const result = [];
+                        if (first) result.push(first);
+                        if (second && second !== first) result.push(second);
 
-                        // Убираем дубликаты
-                        const uniq = [];
-                        results.forEach(v => { if (!uniq.includes(v)) uniq.push(v); });
-
-                        return uniq.length ? uniq.join(' / ') : null;
+                        return result.length ? result.join(' / ') : null;
                     }
                 """)
                 print(f"[DEBUG] priorbank_banner_bold = {value}")
