@@ -3,7 +3,7 @@ from playwright.async_api import async_playwright
 # ============ КАРТА ДЕЙСТВИЙ ============
 
 ACTION_MAP = {
-    # === ИПОТЕКА Беларусбанк ===
+    # === Беларусбанк — Ипотека ===
     "select_ipoteka_24": ("111", None),
     "select_ipoteka_12": ("112", "21"),
     "select_ipoteka_12_gos": ("112", "23"),
@@ -35,7 +35,7 @@ ACTION_MAP = {
     "select_stroydom_3": (None, "3"),
     "select_avto_131": ("131", "2"),
     "select_avto_132": ("132", "2"),
-    # === ПОТРЕБИТЕЛЬСКИЕ Беларусбанк ===
+    # === Беларусбанк — Потребительские ===
     "select_svaye_5": (None, "5"),
     "select_svaye_7": (None, "7"),
     "select_svaye_doma_63": (None, "63"),
@@ -70,7 +70,6 @@ ACTION_MAP = {
 # ============ БЛОКИРОВКА ЛИШНИХ РЕСУРСОВ ============
 
 async def block_resources(route):
-    """Блокируем картинки, стили, шрифты — ускоряет загрузку в 2-3 раза"""
     if route.request.resource_type in ["image", "stylesheet", "font", "media"]:
         await route.abort()
     else:
@@ -83,14 +82,12 @@ async def get_rate_from_site(url, selector, action=None):
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         await page.set_extra_http_headers({"Accept-Language": "ru-RU,ru;q=0.9"})
-
-        # Блокируем лишние ресурсы (картинки, стили, шрифты)
         await page.route("**/*", block_resources)
 
         try:
             print(f"[DEBUG] Открываю {url}")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(1000)  # уменьшили с 2000 до 1000
+            await page.wait_for_timeout(1000)
 
             if action:
                 print(f"[DEBUG] Выполняю action: {action}")
@@ -106,7 +103,7 @@ async def get_rate_from_site(url, selector, action=None):
                             }}
                         }}
                     """)
-                    await page.wait_for_timeout(1000)  # уменьшили с 2000 до 1000
+                    await page.wait_for_timeout(1000)
 
                 if radio_value:
                     await page.evaluate(f"""
@@ -121,7 +118,24 @@ async def get_rate_from_site(url, selector, action=None):
                             }}
                         }}
                     """)
-                    await page.wait_for_timeout(1000)  # уменьшили с 2000 до 1000
+                    await page.wait_for_timeout(1000)
+
+            # === Приорбанк: «На белорусские товары» ===
+            if selector == "priorbank_bel_tovary":
+                value = await page.evaluate("""
+                    () => {
+                        const els = document.querySelectorAll('.icons-text-descr span');
+                        const values = [];
+                        els.forEach(el => {
+                            const t = el.innerText.trim();
+                            if (t && t.includes('%')) values.push(t.split(' ')[0]);
+                        });
+                        return values.length ? values.join(' / ') : null;
+                    }
+                """)
+                print(f"[DEBUG] priorbank_bel_tovary = {value}")
+                await browser.close()
+                return value if value else None
 
             # === МТБанк ===
             if selector == "mtbank_na_mary" or selector == "mtbank_greeting_text":
