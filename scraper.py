@@ -212,6 +212,51 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
+            # === Альфа-Банк: потребительский кредит (хитрый поиск) ===
+            if selector == "alfabank_cash_rate":
+                value = await page.evaluate("""
+                    () => {
+                        const parseRate = (s) => {
+                            if (!s) return null;
+                            const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
+                            if (!m) return null;
+                            return m[1].replace(',', '.') + '%';
+                        };
+
+                        // 1. Пробуем .page-top-section__text (шапка страницы)
+                        const topText = document.querySelector('.page-top-section__text');
+                        if (topText) {
+                            const t = (topText.innerText || '').trim();
+                            const r = parseRate(t);
+                            if (r) return r;
+                        }
+
+                        // 2. Ищем фразу "Ставка X,X% годовых" где угодно в тексте
+                        const nodes = document.querySelectorAll('p, div, span, li');
+                        for (const el of nodes) {
+                            if (el.children.length > 0) return; // только листовые
+                            const t = (el.innerText || '').trim();
+                            if (!t) continue;
+                            if (/Ставка\\s+\\d/i.test(t)) {
+                                const r = parseRate(t);
+                                if (r) return r;
+                            }
+                        }
+
+                        // 3. Fallback — любой .page-top-section__text с %
+                        const anyTop = document.querySelectorAll('.page-top-section__text');
+                        for (const el of anyTop) {
+                            const r = parseRate(el.innerText || '');
+                            if (r) return r;
+                        }
+
+                        return null;
+                    }
+                """)
+                print(f"[DEBUG] alfabank_cash_rate = {value}")
+                await browser.close()
+                return value if value else None
+
             # === Альфа-Банк: фиксированная ставка из блока-фичи ===
             if selector == "alfabank_fixed_rate":
                 value = await page.evaluate("""
@@ -270,7 +315,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                                 for (const line of lines) {{
                                     const isAfter = /по\\s+истечении/i.test(line);
 
-                                    // "X,XX" или "X,XX%" + необязательно "(N месяцев)"
                                     const re = /(\\d{{1,2}}[.,]\\d{{1,2}})\\s*%?\\s*(?:\\((\\d{{1,3}})\\s*мес[^)]*\\))?/g;
                                     let m;
                                     while ((m = re.exec(line)) !== null) {{

@@ -7,6 +7,12 @@ ALFABANK = {
             "selector": "alfabank_fixed_rate",
             "action": None
         },
+        "cash": {
+            "name": "💳 Потребительский кредит",
+            "url": "https://www.alfabank.by/credits/cash/",
+            "selector": "alfabank_cash_rate",
+            "action": None
+        },
         "bel_car_main": {
             "name": "🚗 Кредит на авто — основные дилеры",
             "url": "https://www.alfabank.by/credits/otechestv-proizvod/bel-car/",
