@@ -240,42 +240,39 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: ФИНАЛ ===
+            # === Белагропромбанк: финальный ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
-                        const parseRate = (s) => {
+                        const getPercent = (s) => {
                             if (!s) return null;
                             const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
                             return m ? m[1].replace(',', '.') + '%' : null;
                         };
 
-                        let mainRate = null;   // 13.9%
-                        let graceRate = null;  // 7%
+                        let mainRate = null;
+                        let graceRate = null;
 
-                        // 1. Идём по всем <td> — ищем заголовки и их соседей
+                        // По всем <td>: ищем пару "заголовок → сосед"
                         const tds = document.querySelectorAll('td');
                         for (const td of tds) {
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                            if (t.length > 200) continue;
+                            if (!t || t.length > 200) continue;
 
                             const next = td.nextElementSibling;
                             if (!next) continue;
-                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
+                            const nextText = next.innerText || '';
 
-                            // Основная ставка
-                            if (t.indexOf('Процентная ставка по кредитному договору') !== -1) {
-                                if (!mainRate) mainRate = parseRate(nextText);
+                            if (t.indexOf('Процентная ставка по кредитному договору') !== -1 && !mainRate) {
+                                mainRate = getPercent(nextText);
                             }
-
-                            // Грейс: <td> содержит "Грейс-период" И в соседе есть %
-                            if (t.indexOf('Грейс-период') !== -1) {
-                                const r = parseRate(nextText);
-                                if (r && !graceRate) graceRate = r;
+                            if (t.indexOf('Грейс-период') !== -1 && !graceRate) {
+                                const r = getPercent(nextText);
+                                if (r) graceRate = r;
                             }
                         }
 
-                        // 2. Если из таблицы что-то нашли — отдаём (грейс ПЕРВЫЙ, потом основная)
+                        // Отдаём: сначала грейс, потом основная
                         if (mainRate || graceRate) {
                             const parts = [];
                             if (graceRate) parts.push(graceRate);
@@ -283,7 +280,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             return parts.join('; ');
                         }
 
-                        // 3. Fallback: <li class="page-head__list-item">
+                        // Fallback 1: <li class="page-head__list-item">
                         const items = document.querySelectorAll('li.page-head__list-item');
                         for (const li of items) {
                             const nameEl = li.querySelector('.page-head__list-name');
@@ -291,17 +288,16 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (nameEl.innerText.toLowerCase().indexOf('процентная ставка') === -1) continue;
                             const valEl = li.querySelector('.page-head__list-val');
                             if (!valEl) continue;
-                            const r = parseRate(valEl.innerText || '');
+                            const r = getPercent(valEl.innerText || '');
                             if (r) return r;
                         }
 
-                        // 4. Fallback: <span class="credit-info__list-val">
+                        // Fallback 2: <span class="credit-info__list-val">
                         const creditVals = document.querySelectorAll('.credit-info__list-val');
                         for (const cv of creditVals) {
                             const t = (cv.innerText || '').trim();
-                            if (!t) continue;
                             if (t.toLowerCase().indexOf('процентная ставка') === -1) continue;
-                            const r = parseRate(t);
+                            const r = getPercent(t);
                             if (r) return r;
                         }
 
