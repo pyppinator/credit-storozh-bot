@@ -212,73 +212,89 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белгазпромбанк: ДЕБАЖ-2 ===
+            # === Белгазпромбанк: ищем ПРАВИЛЬНЫЙ <td> — короткий заголовок + есть сосед ===
             if selector == "belgazprombank_rates":
                 value = await page.evaluate("""
                     () => {
-                        const out = [];
-                        const push = (label, val) => {
-                            out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
-                        };
-
-                        // 1. Находим <td> с заголовком
+                        // 1. Собираем ВСЕ <td>, где текст содержит "размер процентов" И "и порядок их уплаты"
+                        //    (это отсекает длинный текст про пеню, где "проценты за пользование кредитом" упомянуты вскользь)
                         const tds = document.querySelectorAll('td');
-                        let targetTd = null;
+                        const candidates = [];
+
                         for (const td of tds) {
-                            const t = (td.innerText || '').toLowerCase();
-                            if (t.includes('размер процентов за пользование кредитом')) {
-                                targetTd = td;
-                                break;
+                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
+
+                            // заголовок должен быть КОРОТКИМ и содержать "размер процентов" + "порядок"
+                            if (t.length > 150) continue;
+                            if (!/размер\\s+процентов/i.test(t)) continue;
+                            if (!/порядок/i.test(t)) continue;
+
+                            // обязательно должен быть сосед справа
+                            const next = td.nextElementSibling;
+                            if (!next) continue;
+
+                            // сосед должен содержать хотя бы один %
+                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
+                            if (!/%/.test(nextText)) continue;
+
+                            candidates.push({ td: td, next: next, headerText: t, nextText: nextText });
+                        }
+
+                        if (candidates.length === 0) return null;
+
+                        // 2. Берём первого валидного кандидата
+                        const c = candidates[0];
+                        const text = c.nextText.replace(/\\s+/g, ' ');
+
+                        const results = [];
+
+                        // 3. Первая ставка: "В течение первых 180 календарных дней – 0,000001% годовых"
+                        const firstM = text.match(/первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
+                        if (firstM) {
+                            const days = firstM[1];
+                            const val = firstM[2].replace(',', '.') + '%';
+                            results.push(val + ' (' + days + ' дн.)');
+                        }
+
+                        // 4. Вторая ставка: "Начиная с 181 календарного дня – 12,8% годовых"
+                        const secondM = text.match(/(?:начиная\\s+)?с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
+                        if (secondM) {
+                            const val = secondM[2].replace(',', '.') + '%';
+                            results.push(val + ' (далее)');
+                        }
+
+                        // 5. Fallback — если одна из ставок не нашлась через фразу,
+                        //    добираем из всех X% в тексте
+                        if (results.length < 2) {
+                            const matches = text.match(/([\\d.,]+)\\s*%/g) || [];
+                            const uniq = [];
+                            matches.forEach(m => {
+                                const v = m.replace(',', '.').replace(/\\s/g, '').trim();
+                                if (!uniq.includes(v)) uniq.push(v);
+                            });
+
+                            if (results.length === 0) {
+                                if (uniq.length >= 2) {
+                                    results.push(uniq[0] + ' (180 дн.)');
+                                    results.push(uniq[1] + ' (далее)');
+                                } else if (uniq.length === 1) {
+                                    results.push(uniq[0] + ' (далее)');
+                                }
+                            } else if (results.length === 1) {
+                                const firstVal = results[0].split(' ')[0]; // "0.000001%"
+                                for (const v of uniq) {
+                                    if (v !== firstVal) {
+                                        results.push(v + ' (далее)');
+                                        break;
+                                    }
+                                }
                             }
                         }
-                        push('target_found', !!targetTd);
-                        if (!targetTd) return out.join('\\n');
 
-                        push('target_tag', targetTd.tagName);
-                        push('target_innerText', (targetTd.innerText || '').slice(0, 200));
-
-                        // 2. nextElementSibling
-                        const next = targetTd.nextElementSibling;
-                        push('next_found', !!next);
-                        if (!next) return out.join('\\n');
-
-                        push('next_tag', next.tagName);
-                        push('next_class', next.className || '');
-                        push('next_innerText', (next.innerText || '').slice(0, 500));
-                        push('next_innerHTML', (next.innerHTML || '').slice(0, 500));
-
-                        // 3. Все %-числа в next.innerText
-                        const text = (next.innerText || '').replace(/\\u00a0/g, ' ');
-                        const matches = text.match(/([\\d.,]+)\\s*%/g) || [];
-                        push('pct_in_next_text', JSON.stringify(matches));
-
-                        // 4. Все %-числа в next.textContent
-                        const text2 = (next.textContent || '').replace(/\\u00a0/g, ' ');
-                        const matches2 = text2.match(/([\\d.,]+)\\s*%/g) || [];
-                        push('pct_in_next_textContent', JSON.stringify(matches2));
-
-                        // 5. Родитель <tr> — вдруг ставки лежат в следующей строке?
-                        const tr = targetTd.closest('tr');
-                        push('tr_found', !!tr);
-                        if (tr) {
-                            const trText = (tr.innerText || '').replace(/\\u00a0/g, ' ');
-                            push('tr_text_slice', trText.slice(0, 500));
-                            const trPct = trText.match(/([\\d.,]+)\\s*%/g) || [];
-                            push('pct_in_tr', JSON.stringify(trPct));
-                        }
-
-                        // 6. Ищем в body фразу про "Начиная с"
-                        const bodyText = (document.body.innerText || '').replace(/\\u00a0/g, ' ');
-                        const idx = bodyText.toLowerCase().indexOf('начиная');
-                        push('body_idx_nachinaya', idx);
-                        if (idx >= 0) {
-                            push('body_slice', bodyText.slice(idx - 50, idx + 200));
-                        }
-
-                        return out.join('\\n');
+                        return results.length ? results.join(' / ') : null;
                     }
                 """)
-                print(f"[DEBUG] belgazprombank_rates:\n{value}")
+                print(f"[DEBUG] belgazprombank_rates = {value}")
                 await browser.close()
                 return value if value else None
 
