@@ -122,11 +122,10 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
             await page.wait_for_timeout(3000)
 
-            # === Анти-бот детектор: если title == "Verification" — нас забанили ===
+            # === Анти-бот детектор ===
             title = await page.title()
             if "verification" in title.lower() or "проверка" in title.lower():
                 print(f"[ANTIBOT] Белгазпромбанк вернул страницу Verification. title={title}")
-                # ждём подольше — возможно, JS-челлендж решится сам
                 await page.wait_for_timeout(5000)
                 title2 = await page.title()
                 print(f"[ANTIBOT] повторная проверка title={title2}")
@@ -257,11 +256,11 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белгазпромбанк: 2 ставки ===
+            # === Белгазпромбанк: собираем ВСЕ пары «первых N – X%» / «с N – Y%» ===
             if selector == "belgazprombank_rates":
                 value = await page.evaluate("""
                     () => {
-                        // 1. Ищем ВСЕ <td> с коротким текстом, где есть "размер процентов" и "порядок"
+                        // 1. Находим <td> с коротким заголовком "размер процентов" + "порядок"
                         const tds = document.querySelectorAll('td');
                         let targetNext = null;
 
@@ -285,45 +284,40 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                         const text = targetNext.replace(/\\s+/g, ' ').trim();
                         const results = [];
 
-                        // 2. Первая ставка: "первых 180 календарных дней – 0,000001%"
-                        const firstM = text.match(/первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
-                        if (firstM) {
-                            const days = firstM[1];
-                            const val = firstM[2].replace(',', '.') + '%';
-                            results.push(val + ' (' + days + ' дн.)');
+                        // 2. Собираем ВСЕ пары "первых N календарных дней – X%"
+                        const firstRe = /первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*([\\d.,]+)\\s*%/gi;
+                        let m;
+                        while ((m = firstRe.exec(text)) !== null) {
+                            const days = m[1];
+                            const val = m[2].replace(',', '.') + '%';
+                            const item = val + ' (' + days + ' дн.)';
+                            if (!results.includes(item)) results.push(item);
                         }
 
-                        // 3. Вторая ставка: "Начиная с 181 календарного дня – 12,8%"
-                        const secondM = text.match(/(?:начиная\\s+)?с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
-                        if (secondM) {
-                            const val = secondM[2].replace(',', '.') + '%';
-                            results.push(val + ' (далее)');
+                        // 3. Собираем ВСЕ "с N календарного дня – Y%"
+                        const secondRe = /с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*([\\d.,]+)\\s*%/gi;
+                        while ((m = secondRe.exec(text)) !== null) {
+                            const val = m[2].replace(',', '.') + '%';
+                            const item = val + ' (далее)';
+                            if (!results.includes(item)) results.push(item);
                         }
 
-                        // 4. Fallback — все X% в порядке появления
-                        if (results.length < 2) {
+                        // 4. Fallback — если вообще ничего не нашли через фразы,
+                        //    берём все X% в порядке появления, первую как (180 дн.), вторую как (далее)
+                        if (results.length === 0) {
                             const matches = text.match(/([\\d.,]+)\\s*%/g) || [];
                             const uniq = [];
-                            matches.forEach(m => {
-                                const v = m.replace(',', '.').replace(/\\s/g, '').trim();
+                            matches.forEach(mm => {
+                                const v = mm.replace(',', '.').replace(/\\s/g, '').trim();
                                 if (!uniq.includes(v)) uniq.push(v);
                             });
-
-                            if (results.length === 0) {
-                                if (uniq.length >= 2) {
-                                    results.push(uniq[0] + ' (180 дн.)');
-                                    results.push(uniq[1] + ' (далее)');
-                                } else if (uniq.length === 1) {
-                                    results.push(uniq[0] + ' (далее)');
+                            if (uniq.length >= 2) {
+                                results.push(uniq[0] + ' (180 дн.)');
+                                for (let i = 1; i < uniq.length; i++) {
+                                    results.push(uniq[i] + ' (далее)');
                                 }
-                            } else if (results.length === 1) {
-                                const firstVal = results[0].split(' ')[0];
-                                for (const v of uniq) {
-                                    if (v !== firstVal) {
-                                        results.push(v + ' (далее)');
-                                        break;
-                                    }
-                                }
+                            } else if (uniq.length === 1) {
+                                results.push(uniq[0] + ' (далее)');
                             }
                         }
 
