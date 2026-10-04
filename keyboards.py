@@ -104,7 +104,6 @@ def admin_menu():
     ])
 
 def admin_check_banks_menu():
-    """Меню выбора банка для проверки"""
     buttons = []
     for bank_id, bank_data in BANKS.items():
         buttons.append([InlineKeyboardButton(text=f"🏦 {bank_data['name']}", callback_data=f"check_{bank_id}")])
@@ -112,12 +111,10 @@ def admin_check_banks_menu():
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def admin_check_products_menu(bank_id):
-    """Меню выбора продукта для проверки"""
     bank = BANKS.get(bank_id)
     if not bank:
         return None
     buttons = []
-    
     if "categories" in bank:
         for cat_id, cat_data in bank["categories"].items():
             for group_id, group_data in cat_data["groups"].items():
@@ -139,9 +136,17 @@ def admin_check_products_menu(bank_id):
                 text=f"🔍 {prod_data['name']}",
                 callback_data=f"checkp_{bank_id}_{prod_id}"
             )])
-    
     buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_check")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def admin_check_result_menu(bank_name, product_name):
+    """Меню после проверки — сохранить или выйти"""
+    import hashlib
+    key = hashlib.md5(f"{bank_name}|{product_name}".encode()).hexdigest()[:16]
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💾 Сохранить в БД", callback_data=f"savetodb_{key}")],
+        [InlineKeyboardButton(text="⬅️ Назад в админку", callback_data="admin_panel")],
+    ])
 
 def top_products_menu():
     return InlineKeyboardMarkup(inline_keyboard=[

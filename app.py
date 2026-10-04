@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 import logging
+import hashlib
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
@@ -12,13 +13,14 @@ from keyboards import (
     main_menu, banks_menu, bank_menu, category_menu, group_menu,
     subscriptions_menu, unsubscribe_menu, refinance_menu,
     admin_menu, top_products_menu,
-    admin_check_banks_menu, admin_check_products_menu
+    admin_check_banks_menu, admin_check_products_menu, admin_check_result_menu
 )
 from database import (
     init_db, add_subscription, get_user_subscriptions,
     get_user_subscriptions_with_id, delete_subscription_by_id, add_request,
     check_subscription_exists, get_rate_from_db, get_all_subscriptions, get_stats,
-    get_grouped_subscriptions, delete_all_user_subscriptions, get_last_update_time
+    get_grouped_subscriptions, delete_all_user_subscriptions, get_last_update_time,
+    update_rate_in_db, update_rate_for_all
 )
 from products import BANKS
 from products_map import PRODUCTS_MAP
@@ -39,6 +41,12 @@ logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+
+# Временное хранилище для результатов проверки (bank, product, rate)
+_check_cache = {}
+
+def _make_key(bank_name, product_name):
+    return hashlib.md5(f"{bank_name}|{product_name}".encode()).hexdigest()[:16]
 
 # ============ ХЕНДЛЕРЫ ============
 
@@ -416,18 +424,24 @@ async def admin_check_product(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
-    # Запускаем scraper ТОЛЬКО для этого продукта
     rate = await get_rate_from_site(product["url"], product["selector"], product.get("action"))
     if not rate:
         rate = "не удалось получить"
 
     old_rate = get_rate_from_db(bank["name"], product["name"]) or "нет в БД"
 
-    # Определяем, совпадает ли
     if rate == old_rate:
         status = "✅ Совпадает"
     else:
         status = "⚠️ НЕ СОВПАДАЕТ"
+
+    # Сохраняем во временный кэш
+    key = _make_key(bank["name"], product["name"])
+    _check_cache[key] = {
+        "bank": bank["name"],
+        "product": product["name"],
+        "rate": rate
+    }
 
     await callback.message.edit_text(
         f"🔍 <b>Результат проверки</b>\n\n"
@@ -436,6 +450,40 @@ async def admin_check_product(callback: CallbackQuery):
         f"📡 Ставка с сайта: <b>{rate}</b>\n"
         f"💾 Ставка в БД: <b>{old_rate}</b>\n\n"
         f"{status}",
+        reply_markup=admin_check_result_menu(bank["name"], product["name"]),
+        parse_mode="HTML"
+    )
+
+@dp.callback_query(F.data.startswith("savetodb_"))
+async def save_to_db(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    key = callback.data.replace("savetodb_", "")
+    data = _check_cache.get(key)
+
+    if not data:
+        await callback.answer("❌ Данные устарели. Проверь заново.", show_alert=True)
+        return
+
+    bank_name = data["bank"]
+    product_name = data["product"]
+    rate = data["rate"]
+
+    # Сохраняем в БД
+    update_rate_in_db(bank_name, product_name, rate)
+    update_rate_for_all(bank_name, product_name, rate)
+
+    # Удаляем из кэша
+    del _check_cache[key]
+
+    await callback.message.edit_text(
+        f"✅ <b>Сохранено в БД!</b>\n\n"
+        f"Банк: {bank_name}\n"
+        f"Кредит: «{product_name}»\n"
+        f"Новая ставка: <b>{rate}</b>\n\n"
+        f"Теперь все подписчики увидят её.",
         reply_markup=admin_menu(),
         parse_mode="HTML"
     )
