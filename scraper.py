@@ -212,6 +212,71 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
+            # === Белгазпромбанк: строка «Размер процентов» → две ставки с подписями ===
+            if selector == "belgazprombank_rates":
+                value = await page.evaluate("""
+                    () => {
+                        // Находим td с фразой "Размер процентов за пользование кредитом"
+                        const tds = document.querySelectorAll('td');
+                        let targetTd = null;
+                        for (const td of tds) {
+                            const t = (td.innerText || '').toLowerCase();
+                            if (t.includes('размер процентов за пользование кредитом')) {
+                                targetTd = td;
+                                break;
+                            }
+                        }
+                        if (!targetTd) return null;
+
+                        // Соседний td справа = содержимое
+                        const nextTd = targetTd.nextElementSibling;
+                        if (!nextTd) return null;
+
+                        const text = (nextTd.innerText || '').replace(/\\u00a0/g, ' ');
+                        if (!text) return null;
+
+                        // 1. Первая ставка — после "первых NNN календарных дней"
+                        // 2. Вторая ставка — после "с NNN календарного дня"
+                        const firstMatch = text.match(/первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–-]\\s*([\\d.,]+)\\s*%/i);
+                        const secondMatch = text.match(/(?:начиная\\s+)?с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–-]\\s*([\\d.,]+)\\s*%/i);
+
+                        const results = [];
+
+                        if (firstMatch) {
+                            const days = firstMatch[1];
+                            const val = firstMatch[2].replace(',', '.') + '%';
+                            results.push(val + ' (' + days + ' дн.)');
+                        }
+
+                        if (secondMatch) {
+                            const val = secondMatch[2].replace(',', '.') + '%';
+                            results.push(val + ' (далее)');
+                        }
+
+                        // Если хотя бы одна ставка не нашлась через фразу — fallback:
+                        // берём все X% в порядке появления, первую подписываем "180 дн.", вторую "далее"
+                        if (results.length === 0) {
+                            const all = text.match(/([\\d.,]+)\\s*%/g) || [];
+                            const uniq = [];
+                            all.forEach(m => {
+                                const v = m.replace(',', '.').replace(/\\s/g, '').trim();
+                                if (!uniq.includes(v)) uniq.push(v);
+                            });
+                            if (uniq.length >= 2) {
+                                results.push(uniq[0] + ' (180 дн.)');
+                                results.push(uniq[1] + ' (далее)');
+                            } else if (uniq.length === 1) {
+                                results.push(uniq[0] + ' (далее)');
+                            }
+                        }
+
+                        return results.length ? results.join(' / ') : null;
+                    }
+                """)
+                print(f"[DEBUG] belgazprombank_rates = {value}")
+                await browser.close()
+                return value if value else None
+
             # === Альфа-Банк: потребительский кредит (хитрый поиск) ===
             if selector == "alfabank_cash_rate":
                 value = await page.evaluate("""
@@ -223,7 +288,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             return m[1].replace(',', '.') + '%';
                         };
 
-                        // 1. Пробуем .page-top-section__text (шапка страницы)
                         const topText = document.querySelector('.page-top-section__text');
                         if (topText) {
                             const t = (topText.innerText || '').trim();
@@ -231,10 +295,9 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (r) return r;
                         }
 
-                        // 2. Ищем фразу "Ставка X,X% годовых" где угодно в тексте
                         const nodes = document.querySelectorAll('p, div, span, li');
                         for (const el of nodes) {
-                            if (el.children.length > 0) return; // только листовые
+                            if (el.children.length > 0) return;
                             const t = (el.innerText || '').trim();
                             if (!t) continue;
                             if (/Ставка\\s+\\d/i.test(t)) {
@@ -243,7 +306,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             }
                         }
 
-                        // 3. Fallback — любой .page-top-section__text с %
                         const anyTop = document.querySelectorAll('.page-top-section__text');
                         for (const el of anyTop) {
                             const r = parseRate(el.innerText || '');
@@ -289,7 +351,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 return value if value else None
 
             # === Альфа-Банк: таблица с колонками (кредит на авто) ===
-            # Работает для всех 4 групп дилеров — отличается только column_index (1..4)
             if selector == "alfabank_auto_table":
                 value = await page.evaluate(f"""
                     () => {{
