@@ -319,20 +319,26 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: финальный селектор ===
+            # === Белагропромбанк: универсальный ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
                         const results = [];
 
-                        const parseRate = (s) => {
-                            if (!s) return null;
-                            const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
-                            if (!m) return null;
-                            return m[1].replace(',', '.') + '%';
+                        const extractRates = (text) => {
+                            const out = [];
+                            if (!text) return out;
+                            const re = /([\\d]{1,2}[.,]\\d{1,2})\\s*%/g;
+                            let m;
+                            while ((m = re.exec(text)) !== null) {
+                                const v = m[1].replace(',', '.') + '%';
+                                if (!out.includes(v)) out.push(v);
+                            }
+                            return out;
                         };
 
-                        // 1. Основная ставка из таблицы: "Процентная ставка по кредитному договору"
+                        // 1. Основная ставка из таблицы
+                        let mainFound = false;
                         const tds = document.querySelectorAll('td');
                         for (const td of tds) {
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
@@ -340,33 +346,16 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (!/процентная\\s+ставка\\s+по\\s+кредитному\\s+договору/i.test(t)) continue;
 
                             const next = td.nextElementSibling;
-                            if (!next) continue;
-                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
-                            const r = parseRate(nextText);
-                            if (r && !results.includes(r)) {
-                                results.push(r);
-                                break;
+                            const text = (td.innerText || '') + ' ' + (next ? next.innerText : '');
+                            const rates = extractRates(text);
+                            if (rates.length > 0) {
+                                results.push(rates[0]);
+                                mainFound = true;
                             }
+                            break;
                         }
 
-                        // 2. Если таблицы нет — ищем в <li class="page-head__list-item"> по "Процентная ставка"
-                        if (results.length === 0) {
-                            const items = document.querySelectorAll('li.page-head__list-item');
-                            for (const li of items) {
-                                const nameEl = li.querySelector('.page-head__list-name');
-                                const valEl = li.querySelector('.page-head__list-val');
-                                if (!nameEl || !valEl) continue;
-                                const name = (nameEl.innerText || '').trim().toLowerCase();
-                                if (!name.includes('процентная ставка')) continue;
-                                const r = parseRate(valEl.innerText || '');
-                                if (r && !results.includes(r)) {
-                                    results.push(r);
-                                    break;
-                                }
-                            }
-                        }
-
-                        // 3. Грейс-период (если есть в таблице)
+                        // 2. Грейс-период (если есть в таблице)
                         for (const td of tds) {
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
                             if (t.length > 200) continue;
@@ -376,13 +365,28 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             const days = daysMatch ? daysMatch[1] : '';
 
                             const next = td.nextElementSibling;
-                            if (!next) continue;
-                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
-                            const r = parseRate(nextText);
-                            if (r) {
-                                const item = r + (days ? ' (грейс ' + days + ' дн.)' : ' (грейс)');
-                                if (!results.includes(item) && !results.includes(r)) {
-                                    results.push(item);
+                            const text = (td.innerText || '') + ' ' + (next ? next.innerText : '');
+                            const rates = extractRates(text);
+                            if (rates.length > 0) {
+                                const item = rates[0] + (days ? ' (грейс ' + days + ' дн.)' : ' (грейс)');
+                                if (!results.includes(item)) results.push(item);
+                            }
+                            break;
+                        }
+
+                        // 3. Если в таблице ничего не нашли — ищем в <li class="page-head__list-item">
+                        if (!mainFound) {
+                            const items = document.querySelectorAll('li.page-head__list-item');
+                            for (const li of items) {
+                                const nameEl = li.querySelector('.page-head__list-name');
+                                if (!nameEl) continue;
+                                const name = (nameEl.innerText || '').trim().toLowerCase();
+                                if (!name.includes('процентная ставка')) continue;
+                                const valEl = li.querySelector('.page-head__list-val');
+                                if (!valEl) continue;
+                                const rates = extractRates(valEl.innerText || '');
+                                if (rates.length > 0 && !results.includes(rates[0])) {
+                                    results.push(rates[0]);
                                 }
                                 break;
                             }
