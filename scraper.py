@@ -3,7 +3,6 @@ from playwright.async_api import async_playwright
 # ============ КАРТА ДЕЙСТВИЙ ============
 
 ACTION_MAP = {
-    # === Беларусбанк — Ипотека ===
     "select_ipoteka_24": ("111", None),
     "select_ipoteka_12": ("112", "21"),
     "select_ipoteka_12_gos": ("112", "23"),
@@ -35,7 +34,6 @@ ACTION_MAP = {
     "select_stroydom_3": (None, "3"),
     "select_avto_131": ("131", "2"),
     "select_avto_132": ("132", "2"),
-    # === Беларусбанк — Потребительские ===
     "select_svaye_5": (None, "5"),
     "select_svaye_7": (None, "7"),
     "select_svaye_doma_63": (None, "63"),
@@ -67,15 +65,11 @@ ACTION_MAP = {
     "select_obnovlenie_63": (None, "63"),
 }
 
-# ============ БЛОКИРОВКА ЛИШНИХ РЕСУРСОВ ============
-
 async def block_resources(route):
     if route.request.resource_type in ["image", "stylesheet", "font", "media"]:
         await route.abort()
     else:
         await route.continue_()
-
-# ============ ПОЛУЧЕНИЕ СТАВКИ ============
 
 async def get_rate_from_site(url, selector, action=None, column_index=None):
     async with async_playwright() as p:
@@ -100,16 +94,10 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
         page = await context.new_page()
 
         await page.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
             window.chrome = { runtime: {} };
-            Object.defineProperty(navigator, 'languages', {
-                get: () => ['ru-RU', 'ru', 'en-US', 'en']
-            });
-            Object.defineProperty(navigator, 'plugins', {
-                get: () => [1, 2, 3, 4, 5]
-            });
+            Object.defineProperty(navigator, 'languages', { get: () => ['ru-RU', 'ru', 'en-US', 'en'] });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
         """)
 
         await page.set_extra_http_headers({"Accept-Language": "ru-RU,ru;q=0.9"})
@@ -122,7 +110,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
 
             title = await page.title()
             if "verification" in title.lower() or "проверка" in title.lower():
-                print(f"[ANTIBOT] title={title}")
                 await page.wait_for_timeout(5000)
                 title2 = await page.title()
                 if "verification" in title2.lower() or "проверка" in title2.lower():
@@ -130,9 +117,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                     return None
 
             if action:
-                print(f"[DEBUG] Выполняю action: {action}")
                 value, radio_value = ACTION_MAP.get(action, (None, None))
-
                 if value:
                     await page.evaluate(f"""
                         () => {{
@@ -144,7 +129,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                         }}
                     """)
                     await page.wait_for_timeout(1000)
-
                 if radio_value:
                     await page.evaluate(f"""
                         () => {{
@@ -160,7 +144,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                     """)
                     await page.wait_for_timeout(1000)
 
-            # === Приорбанк: «На белорусские товары» и партнёры ===
+            # === Приорбанк: «На белорусские товары» ===
             if selector == "priorbank_bel_tovary":
                 value = await page.evaluate("""
                     () => {
@@ -173,11 +157,9 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                         return values.length ? values.join(' / ') : null;
                     }
                 """)
-                print(f"[DEBUG] priorbank_bel_tovary = {value}")
                 await browser.close()
                 return value if value else None
 
-            # === Приорбанк: «Проще.net» ===
             if selector == "priorbank_prosche_net":
                 value = await page.evaluate("""
                     () => {
@@ -185,11 +167,9 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                         return el ? el.innerText.trim() : null;
                     }
                 """)
-                print(f"[DEBUG] priorbank_prosche_net = {value}")
                 await browser.close()
                 return value if value else None
 
-            # === Приорбанк: недвижимость ===
             if selector == "priorbank_banner_bold":
                 value = await page.evaluate("""
                     () => {
@@ -199,56 +179,23 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (!m) return null;
                             return m[1].replace(',', '.') + '%';
                         };
-
-                        let first = null;
-                        let second = null;
-
+                        let first = null, second = null;
                         const bolds = document.querySelectorAll('.banner-content_big-bold');
                         for (const el of bolds) {
                             const t = (el.innerText || '').trim();
-                            if (t.includes('%')) {
-                                first = parseRate(t);
-                                if (first) break;
-                            }
+                            if (t.includes('%')) { first = parseRate(t); if (first) break; }
                         }
-
                         const tips = document.querySelectorAll('[data-tooltip-text]');
                         for (const el of tips) {
                             const txt = el.getAttribute('data-tooltip-text') || '';
-                            if (/Далее\\s+применяется\\s+ставка/i.test(txt)) {
-                                second = parseRate(txt);
-                                if (second) break;
-                            }
+                            if (/Далее\\s+применяется\\s+ставка/i.test(txt)) { second = parseRate(txt); if (second) break; }
                         }
-
-                        if (!second) {
-                            const nodes = document.querySelectorAll('p, div, span, li');
-                            const candidates = [];
-                            nodes.forEach(el => {
-                                if (el.children.length > 0) return;
-                                const t = (el.innerText || '').trim();
-                                const m = t.match(/^(\\d{1,2}[.,]\\d{1,2})\\s*%\\s*годовых$/i);
-                                if (m) {
-                                    const num = parseFloat(m[1].replace(',', '.'));
-                                    if (num >= 5 && num <= 40) {
-                                        candidates.push(m[1].replace(',', '.') + '%');
-                                    }
-                                }
-                            });
-                            const uniq = [];
-                            candidates.forEach(v => { if (!uniq.includes(v)) uniq.push(v); });
-                            if (uniq.length >= 2) second = uniq[1];
-                            else if (uniq.length === 1 && uniq[0] !== first) second = uniq[0];
-                        }
-
                         const result = [];
                         if (first) result.push(first);
                         if (second && second !== first) result.push(second);
-
                         return result.length ? result.join(' / ') : null;
                     }
                 """)
-                print(f"[DEBUG] priorbank_banner_bold = {value}")
                 await browser.close()
                 return value if value else None
 
@@ -258,27 +205,21 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                     () => {
                         const tds = document.querySelectorAll('td');
                         let targetNext = null;
-
                         for (const td of tds) {
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
                             if (t.length > 150) continue;
                             if (!/размер\\s+процентов/i.test(t)) continue;
                             if (!/порядок/i.test(t)) continue;
-
                             const next = td.nextElementSibling;
                             if (!next) continue;
                             const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
                             if (!/%/.test(nextText)) continue;
-
                             targetNext = nextText;
                             break;
                         }
-
                         if (!targetNext) return null;
-
                         const text = targetNext.replace(/\\s+/g, ' ').trim();
                         const results = [];
-
                         const firstRe = /первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*(?:от\\s+)?([\\d.,]+)\\s*%/gi;
                         let m;
                         while ((m = firstRe.exec(text)) !== null) {
@@ -287,115 +228,76 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             const item = val + ' (' + days + ' дн.)';
                             if (!results.includes(item)) results.push(item);
                         }
-
                         const secondRe = /с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*(?:от\\s+)?([\\d.,]+)\\s*%/gi;
                         while ((m = secondRe.exec(text)) !== null) {
                             const val = m[2].replace(',', '.') + '%';
                             const item = val + ' (далее)';
                             if (!results.includes(item)) results.push(item);
                         }
-
-                        if (results.length === 0) {
-                            const matches = text.match(/(?:от\\s+)?([\\d.,]+)\\s*%/g) || [];
-                            const uniq = [];
-                            matches.forEach(mm => {
-                                const v = mm.replace('от', '').replace(',', '.').replace(/\\s/g, '').trim();
-                                if (!uniq.includes(v)) uniq.push(v);
-                            });
-                            if (uniq.length >= 2) {
-                                results.push(uniq[0] + ' (180 дн.)');
-                                for (let i = 1; i < uniq.length; i++) {
-                                    results.push(uniq[i] + ' (далее)');
-                                }
-                            } else if (uniq.length === 1) {
-                                results.push(uniq[0] + ' (далее)');
-                            }
-                        }
-
                         return results.length ? results.join(' / ') : null;
                     }
                 """)
-                print(f"[DEBUG] belgazprombank_rates = {value}")
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: универсальный ===
+            # === Белагропромбанк: ДЕБАЖ-2 ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
-                        const results = [];
-
-                        const extractRates = (text) => {
-                            const out = [];
-                            if (!text) return out;
-                            const re = /([\\d]{1,2}[.,]\\d{1,2})\\s*%/g;
-                            let m;
-                            while ((m = re.exec(text)) !== null) {
-                                const v = m[1].replace(',', '.') + '%';
-                                if (!out.includes(v)) out.push(v);
-                            }
-                            return out;
+                        const out = [];
+                        const push = (label, val) => {
+                            out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
                         };
 
-                        // 1. Основная ставка из таблицы
-                        let mainFound = false;
+                        push('page_title', document.title);
+
+                        // Проходим по ВСЕМ td и показываем:
+                        // 1) есть ли "процентная ставка по кредитному договору"
+                        // 2) есть ли "грейс-период"
                         const tds = document.querySelectorAll('td');
-                        for (const td of tds) {
+                        let idxP = 0, idxG = 0;
+                        for (let i = 0; i < tds.length; i++) {
+                            const td = tds[i];
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                            if (t.length > 200) continue;
-                            if (!/процентная\\s+ставка\\s+по\\s+кредитному\\s+договору/i.test(t)) continue;
 
-                            const next = td.nextElementSibling;
-                            const text = (td.innerText || '') + ' ' + (next ? next.innerText : '');
-                            const rates = extractRates(text);
-                            if (rates.length > 0) {
-                                results.push(rates[0]);
-                                mainFound = true;
+                            if (/процентная\\s+ставка\\s+по\\s+кредитному\\s+договору/i.test(t) && t.length < 200) {
+                                push('P_' + idxP + '_i', i);
+                                push('P_' + idxP + '_text', t);
+                                const next = td.nextElementSibling;
+                                push('P_' + idxP + '_next_tag', next ? next.tagName : 'NULL');
+                                push('P_' + idxP + '_next_text', next ? (next.innerText || '').replace(/\\u00a0/g, ' ').slice(0, 100) : 'NULL');
+                                push('P_' + idxP + '_parent_tag', td.parentElement ? td.parentElement.tagName : 'NULL');
+                                push('P_' + idxP + '_parent_children', td.parentElement ? td.parentElement.children.length : 0);
+                                idxP++;
                             }
-                            break;
-                        }
 
-                        // 2. Грейс-период (если есть в таблице)
-                        for (const td of tds) {
-                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                            if (t.length > 200) continue;
-                            if (!/грейс-период/i.test(t)) continue;
-
-                            const daysMatch = t.match(/(\\d{1,4})\\s*дн/i);
-                            const days = daysMatch ? daysMatch[1] : '';
-
-                            const next = td.nextElementSibling;
-                            const text = (td.innerText || '') + ' ' + (next ? next.innerText : '');
-                            const rates = extractRates(text);
-                            if (rates.length > 0) {
-                                const item = rates[0] + (days ? ' (грейс ' + days + ' дн.)' : ' (грейс)');
-                                if (!results.includes(item)) results.push(item);
-                            }
-                            break;
-                        }
-
-                        // 3. Если в таблице ничего не нашли — ищем в <li class="page-head__list-item">
-                        if (!mainFound) {
-                            const items = document.querySelectorAll('li.page-head__list-item');
-                            for (const li of items) {
-                                const nameEl = li.querySelector('.page-head__list-name');
-                                if (!nameEl) continue;
-                                const name = (nameEl.innerText || '').trim().toLowerCase();
-                                if (!name.includes('процентная ставка')) continue;
-                                const valEl = li.querySelector('.page-head__list-val');
-                                if (!valEl) continue;
-                                const rates = extractRates(valEl.innerText || '');
-                                if (rates.length > 0 && !results.includes(rates[0])) {
-                                    results.push(rates[0]);
-                                }
-                                break;
+                            if (/грейс-период/i.test(t) && t.length < 200) {
+                                push('G_' + idxG + '_i', i);
+                                push('G_' + idxG + '_text', t);
+                                const next = td.nextElementSibling;
+                                push('G_' + idxG + '_next_tag', next ? next.tagName : 'NULL');
+                                push('G_' + idxG + '_next_text', next ? (next.innerText || '').replace(/\\u00a0/g, ' ').slice(0, 100) : 'NULL');
+                                idxG++;
                             }
                         }
+                        push('P_count', idxP);
+                        push('G_count', idxG);
 
-                        return results.length ? results.join(' / ') : null;
+                        // Ищем li.page-head__list-item
+                        const items = document.querySelectorAll('li.page-head__list-item');
+                        push('li_page_head_count', items.length);
+                        items.forEach((li, i) => {
+                            push('li_' + i + '_text', (li.innerText || '').replace(/\\u00a0/g, ' ').slice(0, 150));
+                            const nameEl = li.querySelector('.page-head__list-name');
+                            const valEl = li.querySelector('.page-head__list-val');
+                            push('li_' + i + '_name', nameEl ? nameEl.innerText.trim() : 'NULL');
+                            push('li_' + i + '_val', valEl ? valEl.innerText.trim() : 'NULL');
+                        });
+
+                        return out.join('\\n');
                     }
                 """)
-                print(f"[DEBUG] belapb_rates = {value}")
+                print(f"[DEBUG] belapb_rates:\n{value}")
                 await browser.close()
                 return value if value else None
 
@@ -409,14 +311,11 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (!m) return null;
                             return m[1].replace(',', '.') + '%';
                         };
-
                         const topText = document.querySelector('.page-top-section__text');
                         if (topText) {
-                            const t = (topText.innerText || '').trim();
-                            const r = parseRate(t);
+                            const r = parseRate(topText.innerText);
                             if (r) return r;
                         }
-
                         const nodes = document.querySelectorAll('p, div, span, li');
                         for (const el of nodes) {
                             if (el.children.length > 0) return;
@@ -427,21 +326,13 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                                 if (r) return r;
                             }
                         }
-
-                        const anyTop = document.querySelectorAll('.page-top-section__text');
-                        for (const el of anyTop) {
-                            const r = parseRate(el.innerText || '');
-                            if (r) return r;
-                        }
-
                         return null;
                     }
                 """)
-                print(f"[DEBUG] alfabank_cash_rate = {value}")
                 await browser.close()
                 return value if value else None
 
-            # === Альфа-Банк: fixed rate ===
+            # === Альфа-Банк: fixed ===
             if selector == "alfabank_fixed_rate":
                 value = await page.evaluate("""
                     () => {
@@ -457,27 +348,17 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                                 if (m) return m[1].replace(',', '.') + '%';
                             }
                         }
-
-                        const all = document.querySelectorAll('.page-top-section__bottom-item .text');
-                        for (const el of all) {
-                            const t = (el.innerText || '').trim();
-                            const m = t.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
-                            if (m) return m[1].replace(',', '.') + '%';
-                        }
-
                         return null;
                     }
                 """)
-                print(f"[DEBUG] alfabank_fixed_rate = {value}")
                 await browser.close()
                 return value if value else None
 
-            # === Альфа-Банк: auto table ===
+            # === Альфа-Банк: auto ===
             if selector == "alfabank_auto_table":
                 value = await page.evaluate(f"""
                     () => {{
                         const colIdx = {column_index if column_index is not None else 1};
-
                         const tables = document.querySelectorAll('.info-section__table-wrapper table');
                         for (const table of tables) {{
                             const rows = table.querySelectorAll('tr');
@@ -486,41 +367,32 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                                 if (cells.length < 2) continue;
                                 const first = (cells[0].innerText || '').trim().toLowerCase();
                                 if (!first.includes('процентная ставка')) continue;
-
                                 if (colIdx >= cells.length) return null;
                                 const target = cells[colIdx];
                                 const text = (target.innerText || '').replace(/\\u00a0/g, ' ');
-
                                 const lines = text.split(/\\n+/).map(s => s.trim()).filter(Boolean);
-
                                 const results = [];
-
                                 for (const line of lines) {{
                                     const isAfter = /по\\s+истечении/i.test(line);
-
                                     const re = /(\\d{{1,2}}[.,]\\d{{1,2}})\\s*%?\\s*(?:\\((\\d{{1,3}})\\s*мес[^)]*\\))?/g;
                                     let m;
                                     while ((m = re.exec(line)) !== null) {{
                                         const val = m[1].replace(',', '.') + '%';
                                         const months = m[2];
-
                                         let label;
                                         if (isAfter) label = ' (далее)';
                                         else if (months) label = ` (${{months}} мес.)`;
                                         else label = '';
-
                                         const item = val + label;
                                         if (!results.includes(item)) results.push(item);
                                     }}
                                 }}
-
                                 return results.length ? results.join(' / ') : null;
                             }}
                         }}
                         return null;
                     }}
                 """)
-                print(f"[DEBUG] alfabank_auto_table (col={column_index}) = {value}")
                 await browser.close()
                 return value if value else None
 
