@@ -149,6 +149,25 @@ async def get_rate_from_site(url, selector, action=None):
                 await browser.close()
                 return value if value else None
 
+            # === Приорбанк: универсальный сбор всех .banner-content_big-bold ===
+            if selector == "priorbank_banner_bold":
+                value = await page.evaluate("""
+                    () => {
+                        const els = document.querySelectorAll('.banner-content_big-bold');
+                        const values = [];
+                        els.forEach(el => {
+                            const t = el.innerText.trim();
+                            if (t && t.includes('%')) values.push(t);
+                        });
+                        const uniq = [];
+                        values.forEach(v => { if (!uniq.includes(v)) uniq.push(v); });
+                        return uniq.length ? uniq.join(' / ') : null;
+                    }
+                """)
+                print(f"[DEBUG] priorbank_banner_bold = {value}")
+                await browser.close()
+                return value if value else None
+
             # === МТБанк ===
             if selector == "mtbank_na_mary" or selector == "mtbank_greeting_text":
                 value = await page.evaluate("""
