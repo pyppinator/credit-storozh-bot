@@ -240,10 +240,12 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: через <li class="page-head__list-item"> ===
+            # === Белагропромбанк: с МАЯЧКОМ ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
+                        const MARKER = 'BELAPB_v3';  // ← МАЯЧОК
+
                         const results = [];
 
                         // 1. Главный заход: <li class="page-head__list-item"> → "Процентная ставка"
@@ -258,7 +260,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (!valEl) continue;
                             const valText = (valEl.innerText || '').replace(/\\u00a0/g, ' ').trim();
 
-                            // Вытаскиваем ВСЕ X,X% из значения
                             const re = /(\\d{1,2}[.,]\\d{1,2})\\s*%/g;
                             let m;
                             while ((m = re.exec(valText)) !== null) {
@@ -283,7 +284,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             }
                         }
 
-                        // 3. Крайний fallback: <td> "Процентная ставка по кредитному договору" + "Грейс-период"
+                        // 3. Крайний fallback: <td>
                         if (results.length === 0) {
                             let mainRate = null;
                             let graceRate = null;
@@ -304,7 +305,9 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (mainRate && !results.includes(mainRate)) results.push(mainRate);
                         }
 
-                        return results.length ? results.join('; ') : null;
+                        // Добавляем маячок
+                        const final = results.length ? results.join('; ') : null;
+                        return MARKER + '::' + (final || 'NULL');
                     }
                 """)
                 print(f"[DEBUG] belapb_rates = {value}")
