@@ -7,6 +7,24 @@ PRIORBANK = {
             "selector": "priorbank_banner_bold",
             "action": None
         },
+        "pokupka_pod_zalog": {
+            "name": "🏠 Кредит под залог",
+            "url": "https://www.priorbank.by/offers/credits/realty-credit/pokupka-pod-zalog",
+            "selector": "priorbank_banner_bold",
+            "action": None
+        },
+        "drugnaya_semya": {
+            "name": "👨‍👩‍👧 Кредит «Дружная семья»",
+            "url": "https://www.priorbank.by/offers/credits/realty-credit/drugnaya-semya",
+            "selector": "priorbank_banner_bold",
+            "action": None
+        },
+        "stroitelstvo_pod_zalog": {
+            "name": "🏗️ Кредит на строительство под залог",
+            "url": "https://www.priorbank.by/offers/credits/realty-credit/stroitelstvo-pod-zalog",
+            "selector": "priorbank_banner_bold",
+            "action": None
+        },
         "bel_tovary": {
             "name": "🛍️ Кредит «На белорусские товары»",
             "url": "https://www.priorbank.by/offers/credits/credit-na-belorusskie-tovary",
