@@ -79,8 +79,41 @@ async def block_resources(route):
 
 async def get_rate_from_site(url, selector, action=None, column_index=None):
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        # Анти-бот защита: маскируемся под реального Chrome
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+            ],
+        )
+        context = await browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/126.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1920, "height": 1080},
+            locale="ru-RU",
+            timezone_id="Europe/Minsk",
+        )
+        page = await context.new_page()
+
+        # Убираем navigator.webdriver (главный признак автоматизации)
+        await page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+            window.chrome = { runtime: {} };
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['ru-RU', 'ru', 'en-US', 'en']
+            });
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+        """)
+
         await page.set_extra_http_headers({"Accept-Language": "ru-RU,ru;q=0.9"})
         await page.route("**/*", block_resources)
 
@@ -88,6 +121,18 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
             print(f"[DEBUG] Открываю {url}")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
             await page.wait_for_timeout(3000)
+
+            # === Анти-бот детектор: если title == "Verification" — нас забанили ===
+            title = await page.title()
+            if "verification" in title.lower() or "проверка" in title.lower():
+                print(f"[ANTIBOT] Белгазпромбанк вернул страницу Verification. title={title}")
+                # ждём подольше — возможно, JS-челлендж решится сам
+                await page.wait_for_timeout(5000)
+                title2 = await page.title()
+                print(f"[ANTIBOT] повторная проверка title={title2}")
+                if "verification" in title2.lower() or "проверка" in title2.lower():
+                    await browser.close()
+                    return None
 
             if action:
                 print(f"[DEBUG] Выполняю action: {action}")
@@ -212,64 +257,80 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белгазпромбанк: ДЕБАЖ-4 — что вообще на странице ===
+            # === Белгазпромбанк: 2 ставки ===
             if selector == "belgazprombank_rates":
                 value = await page.evaluate("""
                     () => {
-                        const out = [];
-                        const push = (label, val) => {
-                            out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
-                        };
-
-                        // 1. Что на странице вообще: URL, title
-                        push('page_url', location.href);
-                        push('page_title', document.title);
-
-                        // 2. Сколько <td>, <table>, <b> на странице
-                        push('td_count', document.querySelectorAll('td').length);
-                        push('table_count', document.querySelectorAll('table').length);
-                        push('b_count', document.querySelectorAll('b').length);
-                        push('tr_count', document.querySelectorAll('tr').length);
-
-                        // 3. Есть ли слова "проценты", "уплат", "Размер"
-                        const bodyText = (document.body.innerText || '').replace(/\\u00a0/g, ' ');
-                        push('body_has_проценты', /процент/i.test(bodyText));
-                        push('body_has_уплат', /уплат/i.test(bodyText));
-                        push('body_has_размер', /размер/i.test(bodyText));
-                        push('body_has_000001', /0[.,]000001/.test(bodyText));
-                        push('body_has_12_8', /12[.,]8\\s*%/.test(bodyText));
-
-                        // 4. Первые 1500 символов body.innerText
-                        push('body_slice', bodyText.slice(0, 1500));
-
-                        // 5. Найти в body фразу "Размер процентов" и показать контекст
-                        const idx = bodyText.indexOf('Размер процентов');
-                        push('idx_размер_процентов', idx);
-                        if (idx >= 0) {
-                            push('context_размер', bodyText.slice(Math.max(0, idx - 50), idx + 300));
-                        }
-
-                        // 6. Найти "0,000001" в body — показать контекст
-                        const idx2 = bodyText.search(/0[.,]000001/);
-                        push('idx_000001', idx2);
-                        if (idx2 >= 0) {
-                            push('context_000001', bodyText.slice(Math.max(0, idx2 - 200), idx2 + 300));
-                        }
-
-                        // 7. Выводим первые 20 <td> — что там вообще
+                        // 1. Ищем ВСЕ <td> с коротким текстом, где есть "размер процентов" и "порядок"
                         const tds = document.querySelectorAll('td');
-                        let i = 0;
+                        let targetNext = null;
+
                         for (const td of tds) {
-                            if (i >= 20) break;
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                            push('td_' + i, t.slice(0, 150));
-                            i++;
+                            if (t.length > 150) continue;
+                            if (!/размер\\s+процентов/i.test(t)) continue;
+                            if (!/порядок/i.test(t)) continue;
+
+                            const next = td.nextElementSibling;
+                            if (!next) continue;
+                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
+                            if (!/%/.test(nextText)) continue;
+
+                            targetNext = nextText;
+                            break;
                         }
 
-                        return out.join('\\n');
+                        if (!targetNext) return null;
+
+                        const text = targetNext.replace(/\\s+/g, ' ').trim();
+                        const results = [];
+
+                        // 2. Первая ставка: "первых 180 календарных дней – 0,000001%"
+                        const firstM = text.match(/первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
+                        if (firstM) {
+                            const days = firstM[1];
+                            const val = firstM[2].replace(',', '.') + '%';
+                            results.push(val + ' (' + days + ' дн.)');
+                        }
+
+                        // 3. Вторая ставка: "Начиная с 181 календарного дня – 12,8%"
+                        const secondM = text.match(/(?:начиная\\s+)?с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
+                        if (secondM) {
+                            const val = secondM[2].replace(',', '.') + '%';
+                            results.push(val + ' (далее)');
+                        }
+
+                        // 4. Fallback — все X% в порядке появления
+                        if (results.length < 2) {
+                            const matches = text.match(/([\\d.,]+)\\s*%/g) || [];
+                            const uniq = [];
+                            matches.forEach(m => {
+                                const v = m.replace(',', '.').replace(/\\s/g, '').trim();
+                                if (!uniq.includes(v)) uniq.push(v);
+                            });
+
+                            if (results.length === 0) {
+                                if (uniq.length >= 2) {
+                                    results.push(uniq[0] + ' (180 дн.)');
+                                    results.push(uniq[1] + ' (далее)');
+                                } else if (uniq.length === 1) {
+                                    results.push(uniq[0] + ' (далее)');
+                                }
+                            } else if (results.length === 1) {
+                                const firstVal = results[0].split(' ')[0];
+                                for (const v of uniq) {
+                                    if (v !== firstVal) {
+                                        results.push(v + ' (далее)');
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        return results.length ? results.join(' / ') : null;
                     }
                 """)
-                print(f"[DEBUG] belgazprombank_rates:\n{value}")
+                print(f"[DEBUG] belgazprombank_rates = {value}")
                 await browser.close()
                 return value if value else None
 
