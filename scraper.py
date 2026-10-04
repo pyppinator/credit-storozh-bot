@@ -240,54 +240,49 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: финал ===
+            # === Белагропромбанк: тупо и точно ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
-                        const parseRate = (s) => {
+                        // Извлекаем ПЕРВОЕ X,X% из строки
+                        const firstRate = (s) => {
                             if (!s) return null;
                             const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
-                            if (!m) return null;
-                            return m[1].replace(',', '.') + '%';
+                            return m ? m[1].replace(',', '.') + '%' : null;
                         };
 
-                        let mainRate = null;
-                        let graceRate = null;
+                        let mainRate = null;   // 13,9%
+                        let graceRate = null;  // 7%
 
-                        // 1. Основная ставка: <td> "Процентная ставка по кредитному договору" → сосед справа
                         const tds = document.querySelectorAll('td');
                         for (const td of tds) {
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
                             if (t.length > 200) continue;
-                            if (!/процентная\\s+ставка\\s+по\\s+кредитному\\s+договору/i.test(t)) continue;
+
                             const next = td.nextElementSibling;
                             if (!next) continue;
-                            mainRate = parseRate(next.innerText || '');
-                            if (mainRate) break;
+                            const nextText = next.innerText || '';
+
+                            // Основная ставка
+                            if (/процентная\\s+ставка\\s+по\\s+кредитному\\s+договору/i.test(t)) {
+                                if (!mainRate) mainRate = firstRate(nextText);
+                            }
+
+                            // Грейс: строго "Грейс-период" В НАЧАЛЕ строки (отсекает "Срок действия грейс-периода")
+                            if (/^грейс-период/i.test(t)) {
+                                if (!graceRate) graceRate = firstRate(nextText);
+                            }
                         }
 
-                        // 2. Грейс: <td> ТОЧНО "Грейс-период N дней" (не "Срок действия грейс-периода")
-                        for (const td of tds) {
-                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                            if (t.length > 200) continue;
-                            // именно "Грейс-период" в НАЧАЛЕ строки (а не "Срок действия грейс-периода")
-                            if (!/^грейс-период/i.test(t)) continue;
-                            const next = td.nextElementSibling;
-                            if (!next) continue;
-                            graceRate = parseRate(next.innerText || '');
-                            if (graceRate) break;
+                        // Если из таблицы что-то нашли — отдаём
+                        if (mainRate || graceRate) {
+                            const parts = [];
+                            if (graceRate) parts.push('Грейс-период ' + graceRate);
+                            if (mainRate) parts.push(mainRate);
+                            return parts.join('; ');
                         }
 
-                        // 3. Формируем результат
-                        const results = [];
-                        if (graceRate) results.push('Грейс-период ' + graceRate);
-                        if (mainRate) results.push(mainRate);
-
-                        if (results.length > 0) {
-                            return results.join('; ');
-                        }
-
-                        // 4. Fallback: <li class="page-head__list-item"> с "Процентная ставка"
+                        // Fallback — <li class="page-head__list-item">
                         const items = document.querySelectorAll('li.page-head__list-item');
                         for (const li of items) {
                             const nameEl = li.querySelector('.page-head__list-name');
@@ -296,7 +291,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (!name.includes('процентная ставка')) continue;
                             const valEl = li.querySelector('.page-head__list-val');
                             if (!valEl) continue;
-                            const r = parseRate(valEl.innerText || '');
+                            const r = firstRate(valEl.innerText || '');
                             if (r) return r;
                         }
 
