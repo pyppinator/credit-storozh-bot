@@ -240,77 +240,73 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: с МАЯЧКОМ ===
+            # === Белагропромбанк: ДЕБАГ с маячком v4 ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
-                        const MARKER = 'BELAPB_v3';  // ← МАЯЧОК
+                        const MARKER = 'BELAPB_v4';
+                        const out = [];
 
-                        const results = [];
-
-                        // 1. Главный заход: <li class="page-head__list-item"> → "Процентная ставка"
+                        // 1. Что видно в <li class="page-head__list-item">
                         const items = document.querySelectorAll('li.page-head__list-item');
+                        out.push('li_count=' + items.length);
+                        let i = 0;
                         for (const li of items) {
                             const nameEl = li.querySelector('.page-head__list-name');
-                            if (!nameEl) continue;
-                            const name = (nameEl.innerText || '').trim().toLowerCase();
-                            if (name.indexOf('процентная ставка') === -1) continue;
-
                             const valEl = li.querySelector('.page-head__list-val');
-                            if (!valEl) continue;
-                            const valText = (valEl.innerText || '').replace(/\\u00a0/g, ' ').trim();
-
-                            const re = /(\\d{1,2}[.,]\\d{1,2})\\s*%/g;
-                            let m;
-                            while ((m = re.exec(valText)) !== null) {
-                                const v = m[1].replace(',', '.') + '%';
-                                if (!results.includes(v)) results.push(v);
-                            }
-                            break;
+                            out.push('li_' + i + '_name=' + (nameEl ? nameEl.innerText.trim() : 'NULL'));
+                            out.push('li_' + i + '_val=' + (valEl ? valEl.innerText.trim() : 'NULL'));
+                            i++;
+                            if (i >= 3) break;
                         }
 
-                        // 2. Fallback: <span class="credit-info__list-val"> с "Процентная ставка"
-                        if (results.length === 0) {
-                            const creditVals = document.querySelectorAll('.credit-info__list-val');
-                            for (const cv of creditVals) {
-                                const t = (cv.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                                if (t.toLowerCase().indexOf('процентная ставка') === -1) continue;
-                                const re = /(\\d{1,2}[.,]\\d{1,2})\\s*%/g;
-                                let m;
-                                while ((m = re.exec(t)) !== null) {
-                                    const v = m[1].replace(',', '.') + '%';
-                                    if (!results.includes(v)) results.push(v);
-                                }
-                            }
-                        }
-
-                        // 3. Крайний fallback: <td>
-                        if (results.length === 0) {
-                            let mainRate = null;
-                            let graceRate = null;
-                            const tds = document.querySelectorAll('td');
-                            for (const td of tds) {
-                                const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                                if (!t || t.length > 200) continue;
+                        // 2. Что видно в <td> со "Грейс-период"
+                        let gIdx = 0;
+                        const tds = document.querySelectorAll('td');
+                        out.push('td_count=' + tds.length);
+                        for (let j = 0; j < tds.length; j++) {
+                            const td = tds[j];
+                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                            if (t.indexOf('Грейс-период') !== -1 && t.length < 150) {
+                                out.push('G_' + gIdx + '_td_text=' + t);
                                 const next = td.nextElementSibling;
-                                if (!next) continue;
-                                const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
-                                const mm = nextText.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
-                                const r = mm ? mm[1].replace(',', '.') + '%' : null;
-                                if (!r) continue;
-                                if (t.indexOf('Процентная ставка по кредитному договору') !== -1 && !mainRate) mainRate = r;
-                                if (t.indexOf('Грейс-период') !== -1 && !graceRate) graceRate = r;
+                                out.push('G_' + gIdx + '_next_tag=' + (next ? next.tagName : 'NULL'));
+                                out.push('G_' + gIdx + '_next_text=' + (next ? (next.innerText || '').replace(/\\u00a0/g, ' ').trim().slice(0, 80) : 'NULL'));
+                                gIdx++;
+                                if (gIdx >= 2) break;
                             }
-                            if (graceRate) results.push(graceRate);
-                            if (mainRate && !results.includes(mainRate)) results.push(mainRate);
                         }
 
-                        // Добавляем маячок
-                        const final = results.length ? results.join('; ') : null;
-                        return MARKER + '::' + (final || 'NULL');
+                        // 3. Что видно в <td> со "Процентная ставка по кредитному договору"
+                        let pIdx = 0;
+                        for (let j = 0; j < tds.length; j++) {
+                            const td = tds[j];
+                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                            if (t.indexOf('Процентная ставка по кредитному договору') !== -1 && t.length < 200) {
+                                out.push('P_' + pIdx + '_td_text=' + t);
+                                const next = td.nextElementSibling;
+                                out.push('P_' + pIdx + '_next_tag=' + (next ? next.tagName : 'NULL'));
+                                out.push('P_' + pIdx + '_next_text=' + (next ? (next.innerText || '').replace(/\\u00a0/g, ' ').trim().slice(0, 80) : 'NULL'));
+                                pIdx++;
+                                if (pIdx >= 2) break;
+                            }
+                        }
+
+                        // 4. Все <strong> со %
+                        const strongs = document.querySelectorAll('strong');
+                        const strongVals = [];
+                        strongs.forEach(st => {
+                            const t = (st.innerText || '').trim();
+                            if (t.indexOf('%') !== -1 && t.length < 40) {
+                                if (!strongVals.includes(t)) strongVals.push(t);
+                            }
+                        });
+                        out.push('strong_all=' + strongVals.join('|'));
+
+                        return MARKER + '::' + out.join(' ;; ');
                     }
                 """)
-                print(f"[DEBUG] belapb_rates = {value}")
+                print(f"[DEBUG] belapb_rates:\n{value}")
                 await browser.close()
                 return value if value else None
 
