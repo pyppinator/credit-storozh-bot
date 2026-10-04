@@ -87,7 +87,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
         try:
             print(f"[DEBUG] Открываю {url}")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(1500)
+            await page.wait_for_timeout(3000)
 
             if action:
                 print(f"[DEBUG] Выполняю action: {action}")
@@ -212,7 +212,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белгазпромбанк: ДЕБАЖ-3 — показываем ВСЕХ кандидатов ===
+            # === Белгазпромбанк: ДЕБАЖ-4 — что вообще на странице ===
             if selector == "belgazprombank_rates":
                 value = await page.evaluate("""
                     () => {
@@ -221,51 +221,50 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
                         };
 
-                        // Собираем ВСЕ <td>, где текст содержит "размер процентов"
+                        // 1. Что на странице вообще: URL, title
+                        push('page_url', location.href);
+                        push('page_title', document.title);
+
+                        // 2. Сколько <td>, <table>, <b> на странице
+                        push('td_count', document.querySelectorAll('td').length);
+                        push('table_count', document.querySelectorAll('table').length);
+                        push('b_count', document.querySelectorAll('b').length);
+                        push('tr_count', document.querySelectorAll('tr').length);
+
+                        // 3. Есть ли слова "проценты", "уплат", "Размер"
+                        const bodyText = (document.body.innerText || '').replace(/\\u00a0/g, ' ');
+                        push('body_has_проценты', /процент/i.test(bodyText));
+                        push('body_has_уплат', /уплат/i.test(bodyText));
+                        push('body_has_размер', /размер/i.test(bodyText));
+                        push('body_has_000001', /0[.,]000001/.test(bodyText));
+                        push('body_has_12_8', /12[.,]8\\s*%/.test(bodyText));
+
+                        // 4. Первые 1500 символов body.innerText
+                        push('body_slice', bodyText.slice(0, 1500));
+
+                        // 5. Найти в body фразу "Размер процентов" и показать контекст
+                        const idx = bodyText.indexOf('Размер процентов');
+                        push('idx_размер_процентов', idx);
+                        if (idx >= 0) {
+                            push('context_размер', bodyText.slice(Math.max(0, idx - 50), idx + 300));
+                        }
+
+                        // 6. Найти "0,000001" в body — показать контекст
+                        const idx2 = bodyText.search(/0[.,]000001/);
+                        push('idx_000001', idx2);
+                        if (idx2 >= 0) {
+                            push('context_000001', bodyText.slice(Math.max(0, idx2 - 200), idx2 + 300));
+                        }
+
+                        // 7. Выводим первые 20 <td> — что там вообще
                         const tds = document.querySelectorAll('td');
-                        const hits = [];
-                        let idx = 0;
+                        let i = 0;
                         for (const td of tds) {
+                            if (i >= 20) break;
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-                            if (!/размер\\s+процентов/i.test(t)) continue;
-
-                            const next = td.nextElementSibling;
-                            const nextText = next ? (next.innerText || '').replace(/\\u00a0/g, ' ').slice(0, 300) : null;
-                            const hasNext = !!next;
-                            const hasPercent = nextText ? /%/.test(nextText) : false;
-
-                            hits.push({
-                                n: idx,
-                                len: t.length,
-                                text: t.slice(0, 120),
-                                hasNext: hasNext,
-                                hasPercent: hasPercent,
-                                nextText: nextText
-                            });
-                            idx++;
+                            push('td_' + i, t.slice(0, 150));
+                            i++;
                         }
-
-                        push('total_hits', hits.length);
-                        hits.forEach(h => {
-                            push('hit_' + h.n + '_len', h.len);
-                            push('hit_' + h.n + '_text', h.text);
-                            push('hit_' + h.n + '_hasNext', h.hasNext);
-                            push('hit_' + h.n + '_hasPercent', h.hasPercent);
-                            push('hit_' + h.n + '_nextText', h.nextText);
-                        });
-
-                        // Дополнительно: ищем "Размер процентов за пользование кредитом и порядок" в любой ноде
-                        const all = document.querySelectorAll('*');
-                        const exactHits = [];
-                        for (const el of all) {
-                            if (el.children.length > 0) continue;
-                            const t = (el.innerText || '').trim();
-                            if (t.length < 120 && /размер\\s+процентов/i.test(t) && /порядок/i.test(t)) {
-                                exactHits.push({ tag: el.tagName, cls: el.className || '', text: t, parentTag: el.parentElement ? el.parentElement.tagName : '' });
-                            }
-                        }
-                        push('exact_hits_count', exactHits.length);
-                        exactHits.forEach((h, i) => push('exact_' + i, h.tag + ' | ' + h.cls + ' | parent=' + h.parentTag + ' | ' + h.text));
 
                         return out.join('\\n');
                     }
