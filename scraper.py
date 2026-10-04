@@ -87,7 +87,7 @@ async def get_rate_from_site(url, selector, action=None):
         try:
             print(f"[DEBUG] Открываю {url}")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(1500)
 
             if action:
                 print(f"[DEBUG] Выполняю action: {action}")
@@ -149,18 +149,39 @@ async def get_rate_from_site(url, selector, action=None):
                 await browser.close()
                 return value if value else None
 
-            # === Приорбанк: универсальный сбор всех .banner-content_big-bold ===
+            # === Приорбанк: ставки со страниц недвижимости (баннер + тултип + условия) ===
             if selector == "priorbank_banner_bold":
                 value = await page.evaluate("""
                     () => {
-                        const els = document.querySelectorAll('.banner-content_big-bold');
-                        const values = [];
-                        els.forEach(el => {
-                            const t = el.innerText.trim();
-                            if (t && t.includes('%')) values.push(t);
+                        const results = [];
+
+                        // 1. Основная ставка из баннера
+                        const bannerEl = document.querySelector('.banner-content_big-bold');
+                        if (bannerEl) {
+                            const t = bannerEl.innerText.trim();
+                            if (t && t.includes('%')) results.push(t);
+                        }
+
+                        // 2. Дополнительные ставки из data-tooltip-text
+                        document.querySelectorAll('[data-tooltip-text]').forEach(el => {
+                            const txt = el.getAttribute('data-tooltip-text') || '';
+                            const matches = txt.match(/\\d+[.,]\\d+\\s*%/g);
+                            if (matches) matches.forEach(m => results.push(m.replace('\\s', '')));
                         });
+
+                        // 3. Ставки из блока «Условия кредита» (текстом)
+                        document.querySelectorAll('p, span, div').forEach(el => {
+                            if (el.children.length > 0) return;
+                            const t = el.innerText ? el.innerText.trim() : '';
+                            if (!t) return;
+                            const m = t.match(/^(\\d+[.,]\\d+)\\s*%\\s*годовых$/);
+                            if (m) results.push(m[1] + '%');
+                        });
+
+                        // Убираем дубликаты
                         const uniq = [];
-                        values.forEach(v => { if (!uniq.includes(v)) uniq.push(v); });
+                        results.forEach(v => { if (!uniq.includes(v)) uniq.push(v); });
+
                         return uniq.length ? uniq.join(' / ') : null;
                     }
                 """)
