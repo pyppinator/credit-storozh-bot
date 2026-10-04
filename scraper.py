@@ -212,64 +212,87 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белгазпромбанк: берём ставки из таблицы ===
+            # === Белгазпромбанк: ставки через <b> с % и контекст "первых 180" / "с 181" ===
             if selector == "belgazprombank_rates":
                 value = await page.evaluate("""
                     () => {
-                        // 1. Находим <td> с заголовком "Размер процентов за пользование кредитом"
-                        const tds = document.querySelectorAll('td');
-                        let targetTd = null;
-                        for (const td of tds) {
-                            const t = (td.innerText || '').toLowerCase();
-                            if (t.includes('размер процентов за пользование кредитом')) {
-                                targetTd = td;
-                                break;
+                        // 1. Собираем все <b> с % — это ставки
+                        const bolds = document.querySelectorAll('b');
+                        const found = [];
+
+                        bolds.forEach(b => {
+                            const t = (b.innerText || '').trim();
+                            const m = t.match(/([\\d.,]+)\\s*%/);
+                            if (!m) return;
+
+                            // Смотрим контекст — родитель и его текст
+                            const parent = b.parentElement;
+                            if (!parent) return;
+                            const parentText = (parent.innerText || '').replace(/\\u00a0/g, ' ');
+
+                            // Определяем, к какой ставке относится
+                            // "первых 180" → грейс
+                            // "с 181" / "начиная с 181" → далее
+                            let label = null;
+                            if (/первых\\s+\\d+\\s+календарных/i.test(parentText) ||
+                                /в\\s+течение\\s+первых/i.test(parentText)) {
+                                // первая ставка — грейс
+                                const daysMatch = parentText.match(/первых\\s+(\\d{1,4})\\s+календарных/i);
+                                const days = daysMatch ? daysMatch[1] : '180';
+                                label = ' (' + days + ' дн.)';
+                            } else if (/с\\s+\\d+\\s+календарного\\s+дня/i.test(parentText) ||
+                                       /начиная\\s+с\\s+\\d+/i.test(parentText)) {
+                                label = ' (далее)';
+                            }
+
+                            if (label) {
+                                const val = m[1].replace(',', '.') + '%';
+                                const item = val + label;
+                                if (!found.includes(item)) found.push(item);
+                            }
+                        });
+
+                        // 2. Если ничего не нашли через <b>, ищем через любой текст с % и контекстом
+                        if (found.length === 0) {
+                            const all = document.querySelectorAll('td, p, div, li');
+                            for (const el of all) {
+                                const t = (el.innerText || '').replace(/\\u00a0/g, ' ');
+                                const firstM = t.match(/первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
+                                const secondM = t.match(/с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
+
+                                if (firstM) {
+                                    const days = firstM[1];
+                                    const val = firstM[2].replace(',', '.') + '%';
+                                    const item = val + ' (' + days + ' дн.)';
+                                    if (!found.includes(item)) found.push(item);
+                                }
+                                if (secondM) {
+                                    const val = secondM[2].replace(',', '.') + '%';
+                                    const item = val + ' (далее)';
+                                    if (!found.includes(item)) found.push(item);
+                                }
+                                if (found.length >= 2) break;
                             }
                         }
-                        if (!targetTd) return null;
 
-                        // 2. Берём соседний <td> справа — там ставки и сроки
-                        const nextTd = targetTd.nextElementSibling;
-                        if (!nextTd) return null;
-
-                        const text = (nextTd.innerText || '').replace(/\\u00a0/g, ' ');
-                        if (!text) return null;
-
-                        const results = [];
-
-                        // 3. Первая ставка: "В течение первых 180 календарных дней – 0,000001% годовых"
-                        const firstMatch = text.match(/первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
-                        if (firstMatch) {
-                            const days = firstMatch[1];
-                            const val = firstMatch[1 + 1].replace(',', '.') + '%';
-                            results.push(val + ' (' + days + ' дн.)');
-                        }
-
-                        // 4. Вторая ставка: "Начиная с 181 календарного дня – 12,8% годовых"
-                        const secondMatch = text.match(/(?:начиная\\s+)?с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
-                        if (secondMatch) {
-                            const val = secondMatch[2].replace(',', '.') + '%';
-                            results.push(val + ' (далее)');
-                        }
-
-                        // 5. Fallback — если хотя бы одна ставка не нашлась,
-                        //    берём все X% в порядке появления, первую подписываем "180 дн.", вторую "далее"
-                        if (results.length === 0) {
-                            const all = text.match(/([\\d.,]+)\\s*%/g) || [];
+                        // 3. Совсем отчаянный fallback — берём все X% со страницы, первые два
+                        if (found.length === 0) {
+                            const text = document.body.innerText || '';
+                            const matches = text.match(/([\\d.,]+)\\s*%/g) || [];
                             const uniq = [];
-                            all.forEach(m => {
+                            matches.forEach(m => {
                                 const v = m.replace(',', '.').replace(/\\s/g, '').trim();
                                 if (!uniq.includes(v)) uniq.push(v);
                             });
                             if (uniq.length >= 2) {
-                                results.push(uniq[0] + ' (180 дн.)');
-                                results.push(uniq[1] + ' (далее)');
+                                found.push(uniq[0] + ' (180 дн.)');
+                                found.push(uniq[1] + ' (далее)');
                             } else if (uniq.length === 1) {
-                                results.push(uniq[0] + ' (далее)');
+                                found.push(uniq[0] + ' (далее)');
                             }
                         }
 
-                        return results.length ? results.join(' / ') : null;
+                        return found.length ? found.join(' / ') : null;
                     }
                 """)
                 print(f"[DEBUG] belgazprombank_rates = {value}")
