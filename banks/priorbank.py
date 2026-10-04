@@ -7,5 +7,23 @@ PRIORBANK = {
             "selector": "priorbank_bel_tovary",
             "action": None
         },
+        "bel_tovary_partnery": {
+            "name": "🛍️ Кредит на покупки у партнёров",
+            "url": "https://www.priorbank.by/offers/credits/credit-na-belorusskie-tovary-partnery",
+            "selector": "priorbank_bel_tovary",
+            "action": None
+        },
+        "bel_avto": {
+            "name": "🚗 Кредит на автомобили белорусского производства",
+            "url": "https://www.priorbank.by/offers/credits/credit-belorusskie-avto-partnery",
+            "selector": "priorbank_bel_tovary",
+            "action": None
+        },
+        "prosche_net": {
+            "name": "💻 Кредит «Проще.net»",
+            "url": "https://www.priorbank.by/offers/credits/universal-credit/kredit-online",
+            "selector": "priorbank_prosche_net",
+            "action": None
+        },
     }
 }

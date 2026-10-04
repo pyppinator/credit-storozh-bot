@@ -120,7 +120,7 @@ async def get_rate_from_site(url, selector, action=None):
                     """)
                     await page.wait_for_timeout(1000)
 
-            # === Приорбанк: «На белорусские товары» ===
+            # === Приорбанк: «На белорусские товары» и партнёры ===
             if selector == "priorbank_bel_tovary":
                 value = await page.evaluate("""
                     () => {
@@ -134,6 +134,18 @@ async def get_rate_from_site(url, selector, action=None):
                     }
                 """)
                 print(f"[DEBUG] priorbank_bel_tovary = {value}")
+                await browser.close()
+                return value if value else None
+
+            # === Приорбанк: «Проще.net» ===
+            if selector == "priorbank_prosche_net":
+                value = await page.evaluate("""
+                    () => {
+                        const el = document.querySelector('.banner-content_big-bold');
+                        return el ? el.innerText.trim() : null;
+                    }
+                """)
+                print(f"[DEBUG] priorbank_prosche_net = {value}")
                 await browser.close()
                 return value if value else None
 
