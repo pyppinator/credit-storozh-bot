@@ -79,7 +79,7 @@ async def block_resources(route):
 
 async def get_rate_from_site(url, selector, action=None, column_index=None):
     async with async_playwright() as p:
-        # Анти-бот защита: маскируемся под реального Chrome
+        # Анти-бот защита
         browser = await p.chromium.launch(
             headless=True,
             args=[
@@ -100,7 +100,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
         )
         page = await context.new_page()
 
-        # Убираем navigator.webdriver (главный признак автоматизации)
         await page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {
                 get: () => undefined
@@ -122,7 +121,7 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
             await page.wait_for_timeout(3000)
 
-            # === Анти-бот детектор ===
+            # Анти-бот детектор
             title = await page.title()
             if "verification" in title.lower() or "проверка" in title.lower():
                 print(f"[ANTIBOT] Белгазпромбанк вернул страницу Verification. title={title}")
@@ -256,11 +255,10 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белгазпромбанк: собираем ВСЕ пары «первых N – X%» / «с N – Y%» ===
+            # === Белгазпромбанк: все пары «первых N – [от] X%» / «с N – [от] Y%» ===
             if selector == "belgazprombank_rates":
                 value = await page.evaluate("""
                     () => {
-                        // 1. Находим <td> с коротким заголовком "размер процентов" + "порядок"
                         const tds = document.querySelectorAll('td');
                         let targetNext = null;
 
@@ -284,8 +282,8 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                         const text = targetNext.replace(/\\s+/g, ' ').trim();
                         const results = [];
 
-                        // 2. Собираем ВСЕ пары "первых N календарных дней – X%"
-                        const firstRe = /первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*([\\d.,]+)\\s*%/gi;
+                        // Пары "первых N календарных дней – [от] X%"
+                        const firstRe = /первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*(?:от\\s+)?([\\d.,]+)\\s*%/gi;
                         let m;
                         while ((m = firstRe.exec(text)) !== null) {
                             const days = m[1];
@@ -294,21 +292,20 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (!results.includes(item)) results.push(item);
                         }
 
-                        // 3. Собираем ВСЕ "с N календарного дня – Y%"
-                        const secondRe = /с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*([\\d.,]+)\\s*%/gi;
+                        // Вторые "с N календарного дня – [от] Y%"
+                        const secondRe = /с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*(?:от\\s+)?([\\d.,]+)\\s*%/gi;
                         while ((m = secondRe.exec(text)) !== null) {
                             const val = m[2].replace(',', '.') + '%';
                             const item = val + ' (далее)';
                             if (!results.includes(item)) results.push(item);
                         }
 
-                        // 4. Fallback — если вообще ничего не нашли через фразы,
-                        //    берём все X% в порядке появления, первую как (180 дн.), вторую как (далее)
+                        // Fallback — все X% по порядку, если фразы не сработали
                         if (results.length === 0) {
-                            const matches = text.match(/([\\d.,]+)\\s*%/g) || [];
+                            const matches = text.match(/(?:от\\s+)?([\\d.,]+)\\s*%/g) || [];
                             const uniq = [];
                             matches.forEach(mm => {
-                                const v = mm.replace(',', '.').replace(/\\s/g, '').trim();
+                                const v = mm.replace('от', '').replace(',', '.').replace(/\\s/g, '').trim();
                                 if (!uniq.includes(v)) uniq.push(v);
                             });
                             if (uniq.length >= 2) {
