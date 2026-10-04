@@ -240,11 +240,11 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белагропромбанк: тупо и точно ===
+            # === Белагропромбанк: по трём конкретным <td> ===
             if selector == "belapb_rates":
                 value = await page.evaluate("""
                     () => {
-                        // Извлекаем ПЕРВОЕ X,X% из строки
+                        // Возвращает ПЕРВОЕ "X,X%" из строки, либо null
                         const firstRate = (s) => {
                             if (!s) return null;
                             const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
@@ -261,20 +261,26 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
 
                             const next = td.nextElementSibling;
                             if (!next) continue;
-                            const nextText = next.innerText || '';
+                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
 
                             // Основная ставка
-                            if (/процентная\\s+ставка\\s+по\\s+кредитному\\s+договору/i.test(t)) {
-                                if (!mainRate) mainRate = firstRate(nextText);
+                            if (t.indexOf('Процентная ставка по кредитному договору') !== -1) {
+                                if (!mainRate) {
+                                    mainRate = firstRate(nextText);
+                                }
                             }
 
-                            // Грейс: строго "Грейс-период" В НАЧАЛЕ строки (отсекает "Срок действия грейс-периода")
-                            if (/^грейс-период/i.test(t)) {
-                                if (!graceRate) graceRate = firstRate(nextText);
+                            // Грейс: текст <td> содержит "Грейс-период" И в соседе есть %
+                            // (у "Срок действия грейс-периода" сосед = "120 дней", там % НЕТ → отсеется)
+                            if (t.indexOf('Грейс-период') !== -1) {
+                                const r = firstRate(nextText);
+                                if (r && !graceRate) {
+                                    graceRate = r;
+                                }
                             }
                         }
 
-                        // Если из таблицы что-то нашли — отдаём
+                        // Если хоть что-то нашли — собираем
                         if (mainRate || graceRate) {
                             const parts = [];
                             if (graceRate) parts.push('Грейс-период ' + graceRate);
@@ -282,13 +288,13 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             return parts.join('; ');
                         }
 
-                        // Fallback — <li class="page-head__list-item">
+                        // Fallback — <li class="page-head__list-item"> с "Процентная ставка"
                         const items = document.querySelectorAll('li.page-head__list-item');
                         for (const li of items) {
                             const nameEl = li.querySelector('.page-head__list-name');
                             if (!nameEl) continue;
                             const name = (nameEl.innerText || '').trim().toLowerCase();
-                            if (!name.includes('процентная ставка')) continue;
+                            if (name.indexOf('процентная ставка') === -1) continue;
                             const valEl = li.querySelector('.page-head__list-val');
                             if (!valEl) continue;
                             const r = firstRate(valEl.innerText || '');
