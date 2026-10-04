@@ -116,7 +116,7 @@ async def bank_selected(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
-@dp.callback_query(F.data.startswith("cat_"))
+@dp.callback_query(F.data.startswith("c_"))
 async def category_selected(callback: CallbackQuery):
     parts = callback.data.split("_")
     bank_id = parts[1]
@@ -135,7 +135,7 @@ async def category_selected(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
-@dp.callback_query(F.data.startswith("group_"))
+@dp.callback_query(F.data.startswith("g_"))
 async def group_selected(callback: CallbackQuery):
     parts = callback.data.split("_")
     bank_id = parts[1]
@@ -149,7 +149,7 @@ async def group_selected(callback: CallbackQuery):
     group_id = rest
 
     if "categories" in bank:
-        for cat_key, cat_data in bank["categories"].items():
+        for cat_key in bank["categories"].keys():
             if rest.startswith(cat_key + "_"):
                 cat_id = cat_key
                 group_id = rest[len(cat_key) + 1:]
@@ -173,7 +173,7 @@ async def group_selected(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
-@dp.callback_query(F.data.startswith("prod_"))
+@dp.callback_query(F.data.startswith("p_"))
 async def product_selected(callback: CallbackQuery):
     parts = callback.data.split("_")
     bank_id = parts[1]
@@ -187,7 +187,7 @@ async def product_selected(callback: CallbackQuery):
     if "categories" in bank:
         for cat_id, cat_data in bank["categories"].items():
             for group_id, group_data in cat_data["groups"].items():
-                prefix = f"prod_{bank_id}_{cat_id}_{group_id}_"
+                prefix = f"p_{bank_id}_{cat_id}_{group_id}_"
                 if callback.data.startswith(prefix):
                     prod_id = callback.data[len(prefix):]
                     product = group_data["products"].get(prod_id)
@@ -198,7 +198,7 @@ async def product_selected(callback: CallbackQuery):
 
     if not product and "groups" in bank:
         for group_id, group_data in bank["groups"].items():
-            prefix = f"prod_{bank_id}_{group_id}_"
+            prefix = f"p_{bank_id}_{group_id}_"
             if callback.data.startswith(prefix):
                 prod_id = callback.data[len(prefix):]
                 product = group_data["products"].get(prod_id)
@@ -206,7 +206,7 @@ async def product_selected(callback: CallbackQuery):
                     break
 
     if not product and "products" in bank:
-        prefix = f"prod_{bank_id}_"
+        prefix = f"p_{bank_id}_"
         if callback.data.startswith(prefix):
             prod_id = callback.data[len(prefix):]
             product = bank["products"].get(prod_id)
@@ -251,8 +251,8 @@ async def help_handler(callback: CallbackQuery):
         "• 📊 Ставка рефинансирования — следить за НБРБ\n"
         "• 📝 Нет моего банка/кредита — отправить заявку админу\n\n"
         "<b>Как это работает:</b>\n"
-        "Ты выбираешь кредит. Я каждый день в <b>12:00 по Минску</b> проверяю ставку на сайте банка. "
-        "Если она изменится — пришлю уведомление.\n\n"
+        "Ты выбираешь кредит. Я каждый день в <b>3:00</b> проверяю ставку на сайте банка, "
+        "а в <b>10:00</b> присылаю уведомление, если она изменилась.\n\n"
         "<i>🔒 Все данные берутся только из открытых источников — "
         "публичных страниц банков, которые они сами показывают своим клиентам. "
         "Я не нарушаю авторские права и не собираю персональные данные.</i>\n\n"
@@ -331,7 +331,9 @@ async def admin_panel(callback: CallbackQuery):
     await callback.message.edit_text(
         f"🔐 <b>Админ-панель</b>\n\n"
         f"🕐 Последнее обновление ставок: <b>{last_update[:16].replace('T', ' ') if last_update != 'никогда' else 'никогда'}</b>\n\n"
-        f"Обход ставок запускается <b>автоматически</b> на GitHub Actions каждый день в 3:00.\n"
+        f"Обход ставок запускается <b>автоматически</b> на GitHub Actions:\n"
+        f"• в 3:00 — обновление БД\n"
+        f"• в 10:00 — рассылка уведомлений\n\n"
         f"Чтобы запустить вручную — нажми «🔄 Запустить обход на GitHub».",
         reply_markup=admin_menu(),
         parse_mode="HTML"
@@ -347,7 +349,8 @@ async def admin_update_rates(callback: CallbackQuery):
         f"Обход запускается на <b>GitHub Actions</b> (не на Render).\n\n"
         f"1. Перейди по ссылке: <a href=\"{GITHUB_ACTIONS_URL}\">GitHub Actions</a>\n"
         f"2. Нажми <b>«Run workflow»</b>.\n"
-        f"3. Дождись завершения (2–3 минуты).\n\n"
+        f"3. Выбери режим: <b>update</b> (обновление) или <b>notify</b> (рассылка).\n"
+        f"4. Дождись завершения (2–15 минут).\n\n"
         f"После этого ставки обновятся.",
         reply_markup=admin_menu(),
         parse_mode="HTML",

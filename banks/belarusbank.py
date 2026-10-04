@@ -1,89 +1,89 @@
 BELARUSBANK = {
     "name": "Беларусбанк",
     "categories": {
-        "nedvizhimost": {
+        "nedv": {
             "name": "🏠 Кредиты на недвижимость",
             "groups": {
-                "ipoteka": {
+                "ipot": {
                     "name": "🏠 Кредит «Ипотека с нами»",
                     "products": {
-                        "ipoteka_24": {"name": "🏠 Ипотека с нами (грейс 24 мес.)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-s-nami-v-ramkakh-partnerskikh-programm/", "selector": "input#stavka", "action": "select_ipoteka_24"},
-                        "ipoteka_12": {"name": "🏠 Ипотека с нами (грейс 12 мес.)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-s-nami-v-ramkakh-partnerskikh-programm/", "selector": "input#stavka", "action": "select_ipoteka_12"},
-                        "ipoteka_12_gos": {"name": "🏛️ Ипотека с нами (грейс 12 мес., гос. застройщик)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-s-nami-v-ramkakh-partnerskikh-programm/", "selector": "input#stavka", "action": "select_ipoteka_12_gos"},
+                        "ipot_24": {"name": "🏠 Ипотека с нами (грейс 24 мес.)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-s-nami-v-ramkakh-partnerskikh-programm/", "selector": "input#stavka", "action": "select_ipoteka_24"},
+                        "ipot_12": {"name": "🏠 Ипотека с нами (грейс 12 мес.)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-s-nami-v-ramkakh-partnerskikh-programm/", "selector": "input#stavka", "action": "select_ipoteka_12"},
+                        "ipot_12gos": {"name": "🏛️ Ипотека с нами (грейс 12 мес., гос. застройщик)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-s-nami-v-ramkakh-partnerskikh-programm/", "selector": "input#stavka", "action": "select_ipoteka_12_gos"},
                     }
                 },
-                "vozvedenie": {
+                "vozv": {
                     "name": "🏗️ Возведение (реконструкция) жилья",
                     "products": {
-                        "vozvedenie_092": {"name": "🌾 Возведение жилья (в населённых пунктах до 20 тыс.)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/", "selector": "input#stavka", "action": "select_vozvedenie_092"},
-                        "vozvedenie_091": {"name": "🧱 Возведение жилья (материалы бел. пр-ва, долевое с гос.)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/", "selector": "input#stavka", "action": "select_vozvedenie_091"},
-                        "vozvedenie_093": {"name": "📜 Возведение жилья (договоры на строительство, облигации)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/", "selector": "input#stavka", "action": "select_vozvedenie_093"},
-                        "vozvedenie_094": {"name": "🏡 Возведение жилья (одноквартирный дом, реконструкция)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/", "selector": "input#stavka", "action": "select_vozvedenie_094"},
-                        "vozvedenie_095": {"name": "🏢 Возведение жилья (многоквартирный дом, гос. заказчики)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/", "selector": "input#stavka", "action": "select_vozvedenie_095"},
+                        "vozv_092": {"name": "🌾 Возведение жилья (в населённых пунктах до 20 тыс.)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/", "selector": "input#stavka", "action": "select_vozvedenie_092"},
+                        "vozv_091": {"name": "🧱 Возведение жилья (материалы бел. пр-ва, долевое с гос.)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/", "selector": "input#stavka", "action": "select_vozvedenie_091"},
+                        "vozv_093": {"name": "📜 Возведение жилья (договоры на строительство, облигации)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/", "selector": "input#stavka", "action": "select_vozvedenie_093"},
+                        "vozv_094": {"name": "🏡 Возведение жилья (одноквартирный дом, реконструкция)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/", "selector": "input#stavka", "action": "select_vozvedenie_094"},
+                        "vozv_095": {"name": "🏢 Возведение жилья (многоквартирный дом, гос. заказчики)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilya/", "selector": "input#stavka", "action": "select_vozvedenie_095"},
                     }
                 },
-                "pokupka_zhilya": {
+                "pokup": {
                     "name": "🏠 Приобретение жилья / незавершённое строение",
                     "products": {
-                        "pokupka_143": {"name": "🌾 Приобретение жилья (в населённых пунктах до 20 тыс.)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_143"},
-                        "pokupka_144": {"name": "🏗️ Приобретение жилья (у застройщика)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_144"},
-                        "pokupka_141": {"name": "👤 Приобретение жилья (у физ. (юр.) лица)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_141"},
-                        "pokupka_142": {"name": "🏚️ Приобретение незавершённого строения", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_142"},
-                        "pokupka_145": {"name": "🏗️ Приобретение жилья (для нуждающихся, у застройщика)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_145"},
-                        "pokupka_146": {"name": "👤 Приобретение жилья (для нуждающихся, у физ. (юр.) лица)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_146"},
+                        "pokup_143": {"name": "🌾 Приобретение жилья (в населённых пунктах до 20 тыс.)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_143"},
+                        "pokup_144": {"name": "🏗️ Приобретение жилья (у застройщика)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_144"},
+                        "pokup_141": {"name": "👤 Приобретение жилья (у физ. (юр.) лица)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_141"},
+                        "pokup_142": {"name": "🏚️ Приобретение незавершённого строения", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_142"},
+                        "pokup_145": {"name": "🏗️ Приобретение жилья (для нуждающихся, у застройщика)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_145"},
+                        "pokup_146": {"name": "👤 Приобретение жилья (для нуждающихся, у физ. (юр.) лица)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredity-na-priobretenie-zhilya-nezavershennogo-zakonservirovannogo-kapitalnogo-stroeniya-na-zemelnom/", "selector": "input#stavka", "action": "select_pokupka_146"},
                     }
                 },
-                "vremya_stroit": {
+                "vremya": {
                     "name": "🏗️ Кредит «Время строить»",
                     "products": {
-                        "vremya_stroit_1": {"name": "🏗️ Время строить (Витебск, Могилёв)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-vremya-stroit-na-vozvedenie-zhilykh-pomeshcheniy-v-mnogokvartirnykh-zhilykh-domakh-zastroyshch/", "selector": "input#stavka", "action": "select_vremya_stroit_1"},
+                        "vremya_1": {"name": "🏗️ Время строить (Витебск, Могилёв)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-vremya-stroit-na-vozvedenie-zhilykh-pomeshcheniy-v-mnogokvartirnykh-zhilykh-domakh-zastroyshch/", "selector": "input#stavka", "action": "select_vremya_stroit_1"},
                     }
                 },
-                "refinansirovanie": {
+                "refin": {
                     "name": "🔄 Рефинансирование ипотеки",
                     "products": {
                         "refin_1": {"name": "🔄 Рефинансирование ипотеки", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-refinansirovanie-ipoteki-/", "selector": "input#stavka", "action": "select_refin_1"},
                     }
                 },
-                "ipoteka_ekspress": {
+                "ekspr": {
                     "name": "⚡ Кредит «Ипотека Экспресс»",
                     "products": {
-                        "ekspress_101": {"name": "🏗️ Ипотека Экспресс (у застройщика)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/", "selector": "input#stavka", "action": "select_ekspress_101"},
-                        "ekspress_102": {"name": "🏗️ Ипотека Экспресс (у застройщика, для нуждающихся)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/", "selector": "input#stavka", "action": "select_ekspress_102"},
-                        "ekspress_103": {"name": "👤 Ипотека Экспресс (у физ. (юр.) лица)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/", "selector": "input#stavka", "action": "select_ekspress_103"},
-                        "ekspress_104": {"name": "👤 Ипотека Экспресс (у физ. (юр.) лица, для нуждающихся)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/", "selector": "input#stavka", "action": "select_ekspress_104"},
+                        "ekspr_101": {"name": "🏗️ Ипотека Экспресс (у застройщика)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/", "selector": "input#stavka", "action": "select_ekspress_101"},
+                        "ekspr_102": {"name": "🏗️ Ипотека Экспресс (у застройщика, для нуждающихся)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/", "selector": "input#stavka", "action": "select_ekspress_102"},
+                        "ekspr_103": {"name": "👤 Ипотека Экспресс (у физ. (юр.) лица)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/", "selector": "input#stavka", "action": "select_ekspress_103"},
+                        "ekspr_104": {"name": "👤 Ипотека Экспресс (у физ. (юр.) лица, для нуждающихся)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-ipoteka-ekspress-na-priobretenie-zhilogo-pomeshcheniya/", "selector": "input#stavka", "action": "select_ekspress_104"},
                     }
                 },
-                "stroysberezheniya": {
+                "stroysb": {
                     "name": "🏦 Стройсбережения",
                     "products": {
-                        "stroysber_vozvedenie_6": {"name": "🏦 Стройсбережения: возведение (вклад с 01.10.2021)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-zhilya-po-sisteme-stroysberezheniy/", "selector": "input#stavka", "action": "select_stroysber_vozvedenie_6"},
-                        "stroysber_vozvedenie_8": {"name": "🏦 Стройсбережения: возведение (общие основания)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-zhilya-po-sisteme-stroysberezheniy/", "selector": "input#stavka", "action": "select_stroysber_vozvedenie_8"},
-                        "stroysber_priobretenie_6": {"name": "🏦 Стройсбережения: приобретение (вклад с 01.10.2021)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-priobretenie-zhilya-po-sisteme-stroysberezheniy/", "selector": "input#stavka", "action": "select_stroysber_priobretenie_6"},
-                        "stroysber_priobretenie_8": {"name": "🏦 Стройсбережения: приобретение (общие основания)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-priobretenie-zhilya-po-sisteme-stroysberezheniy/", "selector": "input#stavka", "action": "select_stroysber_priobretenie_8"},
+                        "stroysb_v6": {"name": "🏦 Стройсбережения: возведение (вклад с 01.10.2021)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-zhilya-po-sisteme-stroysberezheniy/", "selector": "input#stavka", "action": "select_stroysber_vozvedenie_6"},
+                        "stroysb_v8": {"name": "🏦 Стройсбережения: возведение (общие основания)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-zhilya-po-sisteme-stroysberezheniy/", "selector": "input#stavka", "action": "select_stroysber_vozvedenie_8"},
+                        "stroysb_p6": {"name": "🏦 Стройсбережения: приобретение (вклад с 01.10.2021)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-priobretenie-zhilya-po-sisteme-stroysberezheniy/", "selector": "input#stavka", "action": "select_stroysber_priobretenie_6"},
+                        "stroysb_p8": {"name": "🏦 Стройсбережения: приобретение (общие основания)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-priobretenie-zhilya-po-sisteme-stroysberezheniy/", "selector": "input#stavka", "action": "select_stroysber_priobretenie_8"},
                     }
                 },
-                "subsidiya": {
+                "subsid": {
                     "name": "💰 Субсидия на погашение",
                     "products": {
-                        "subsidiya_1": {"name": "💰 Субсидия на погашение", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilykh-pomeshcheniy-s-ispolzovaniem-subsidii-na-ego-pogashenie/", "selector": ".detail-banner__prop_title", "action": None},
+                        "subsid_1": {"name": "💰 Субсидия на погашение", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-na-vozvedenie-rekonstruktsiyu-zhilykh-pomeshcheniy-s-ispolzovaniem-subsidii-na-ego-pogashenie/", "selector": ".detail-banner__prop_title", "action": None},
                     }
                 },
-                "dokreditovanie": {
+                "dokred": {
                     "name": "💰 Кредит «Докредитование»",
                     "products": {
-                        "dokredit_2": {"name": "💰 Докредитование (расчёт по графику)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-dokreditovanie/", "selector": "input#stavka", "action": "select_dokredit_2"},
-                        "dokredit_3": {"name": "💰 Докредитование (за фактическое время)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-dokreditovanie/", "selector": "input#stavka", "action": "select_dokredit_3"},
+                        "dokred_2": {"name": "💰 Докредитование (расчёт по графику)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-dokreditovanie/", "selector": "input#stavka", "action": "select_dokredit_2"},
+                        "dokred_3": {"name": "💰 Докредитование (за фактическое время)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-dokreditovanie/", "selector": "input#stavka", "action": "select_dokredit_3"},
                     }
                 },
-                "stroydom": {
+                "strdom": {
                     "name": "🏗️ Кредит «СТРОЙДОМ»",
                     "products": {
-                        "stroydom_2": {"name": "🏗️ СТРОЙДОМ (расчёт по графику)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-stroydom/", "selector": "input#stavka", "action": "select_stroydom_2"},
-                        "stroydom_3": {"name": "🏗️ СТРОЙДОМ (за фактическое время)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-stroydom/", "selector": "input#stavka", "action": "select_stroydom_3"},
+                        "strdom_2": {"name": "🏗️ СТРОЙДОМ (расчёт по графику)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-stroydom/", "selector": "input#stavka", "action": "select_stroydom_2"},
+                        "strdom_3": {"name": "🏗️ СТРОЙДОМ (за фактическое время)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-stroydom/", "selector": "input#stavka", "action": "select_stroydom_3"},
                     }
                 },
-                "dom_dlya_avto": {
+                "avto": {
                     "name": "🚗 Кредит «Дом для Авто»",
                     "products": {
                         "avto_131": {"name": "🚗 Дом для Авто (машино-место, гараж)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/financing/kredit-dom-dlya-avto/", "selector": "input#stavka", "action": "select_avto_131"},
@@ -92,10 +92,10 @@ BELARUSBANK = {
                 },
             }
         },
-        "potrebitelskie": {
+        "potr": {
             "name": "💳 Потребительские кредиты",
             "groups": {
-                "potrebitelskie": {
+                "potr_all": {
                     "name": "💳 Все потребительские кредиты",
                     "products": {
                         "svaye_5": {"name": "🛍️ «На сваё» (товары бел. пр-ва, в отделении)", "url": "https://belarusbank.by/fizicheskim_licam/kredit/consumer/kredit-na-svaye/", "selector": "input#stavka", "action": "select_svaye_5"},
