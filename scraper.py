@@ -163,7 +163,6 @@ async def get_rate_from_site(url, selector, action=None):
                         let first = null;
                         let second = null;
 
-                        // 1. Первая ставка — первый .banner-content_big-bold, содержащий %
                         const bolds = document.querySelectorAll('.banner-content_big-bold');
                         for (const el of bolds) {
                             const t = (el.innerText || '').trim();
@@ -173,7 +172,6 @@ async def get_rate_from_site(url, selector, action=None):
                             }
                         }
 
-                        // 2. Вторая ставка — из data-tooltip-text с фразой "Далее применяется ставка"
                         const tips = document.querySelectorAll('[data-tooltip-text]');
                         for (const el of tips) {
                             const txt = el.getAttribute('data-tooltip-text') || '';
@@ -183,7 +181,6 @@ async def get_rate_from_site(url, selector, action=None):
                             }
                         }
 
-                        // 3. Fallback — ищем вторую ставку в блоке «Условия кредита»
                         if (!second) {
                             const nodes = document.querySelectorAll('p, div, span, li');
                             const candidates = [];
@@ -212,6 +209,39 @@ async def get_rate_from_site(url, selector, action=None):
                     }
                 """)
                 print(f"[DEBUG] priorbank_banner_bold = {value}")
+                await browser.close()
+                return value if value else None
+
+            # === Альфа-Банк: фиксированная ставка из блока-фичи ===
+            if selector == "alfabank_fixed_rate":
+                value = await page.evaluate("""
+                    () => {
+                        // 1. Ищем .page-top-section__bottom-item, где есть заголовок "Фиксированная ставка" или "Процентная ставка"
+                        const items = document.querySelectorAll('.page-top-section__bottom-item');
+                        for (const item of items) {
+                            const titleEl = item.querySelector('.item-title');
+                            const textEl = item.querySelector('.text');
+                            if (!titleEl || !textEl) continue;
+                            const title = (titleEl.innerText || '').trim().toLowerCase();
+                            if (title.includes('ставка') || title.includes('процент')) {
+                                const t = (textEl.innerText || '').trim();
+                                const m = t.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
+                                if (m) return m[1].replace(',', '.') + '%';
+                            }
+                        }
+
+                        // 2. Fallback — берём первое .text с "%"
+                        const all = document.querySelectorAll('.page-top-section__bottom-item .text');
+                        for (const el of all) {
+                            const t = (el.innerText || '').trim();
+                            const m = t.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
+                            if (m) return m[1].replace(',', '.') + '%';
+                        }
+
+                        return null;
+                    }
+                """)
+                print(f"[DEBUG] alfabank_fixed_rate = {value}")
                 await browser.close()
                 return value if value else None
 
