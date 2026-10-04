@@ -282,7 +282,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                         const text = targetNext.replace(/\\s+/g, ' ').trim();
                         const results = [];
 
-                        // Пары "первых N календарных дней – [от] X%"
                         const firstRe = /первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*(?:от\\s+)?([\\d.,]+)\\s*%/gi;
                         let m;
                         while ((m = firstRe.exec(text)) !== null) {
@@ -292,7 +291,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (!results.includes(item)) results.push(item);
                         }
 
-                        // Вторые "с N календарного дня – [от] Y%"
                         const secondRe = /с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*(?:от\\s+)?([\\d.,]+)\\s*%/gi;
                         while ((m = secondRe.exec(text)) !== null) {
                             const val = m[2].replace(',', '.') + '%';
@@ -300,7 +298,6 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                             if (!results.includes(item)) results.push(item);
                         }
 
-                        // Fallback — все X% по порядку, если фразы не сработали
                         if (results.length === 0) {
                             const matches = text.match(/(?:от\\s+)?([\\d.,]+)\\s*%/g) || [];
                             const uniq = [];
@@ -322,6 +319,80 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                     }
                 """)
                 print(f"[DEBUG] belgazprombank_rates = {value}")
+                await browser.close()
+                return value if value else None
+
+            # === Белагропромбанк: таблица + список ===
+            if selector == "belapb_rates":
+                value = await page.evaluate("""
+                    () => {
+                        const results = [];
+
+                        const parseRate = (s) => {
+                            if (!s) return null;
+                            const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
+                            if (!m) return null;
+                            return m[1].replace(',', '.') + '%';
+                        };
+
+                        // 1. Таблица: ищем строку "Процентная ставка по кредитному договору"
+                        const tds = document.querySelectorAll('td');
+                        for (const td of tds) {
+                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                            if (t.length > 200) continue;
+                            if (!/процентная\\s+ставка\\s+по\\s+кредитному\\s+договору/i.test(t)) continue;
+
+                            const next = td.nextElementSibling;
+                            if (!next) continue;
+                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
+                            const r = parseRate(nextText);
+                            if (r && !results.includes(r)) {
+                                results.push(r);
+                                break;
+                            }
+                        }
+
+                        // 2. Таблица: ищем "Грейс-период N дней" → подпись (грейс N дн.)
+                        for (const td of tds) {
+                            const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
+                            if (t.length > 200) continue;
+                            if (!/грейс-период/i.test(t)) continue;
+
+                            const daysMatch = t.match(/(\\d{1,4})\\s*дн/i);
+                            const days = daysMatch ? daysMatch[1] : '';
+
+                            const next = td.nextElementSibling;
+                            if (!next) continue;
+                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
+                            const r = parseRate(nextText);
+                            if (r) {
+                                const item = r + (days ? ' (грейс ' + days + ' дн.)' : ' (грейс)');
+                                if (!results.includes(item)) results.push(item);
+                                break;
+                            }
+                        }
+
+                        // 3. Список: <li class="page-head__list-item"> с "Процентная ставка"
+                        if (results.length === 0) {
+                            const items = document.querySelectorAll('li.page-head__list-item');
+                            for (const li of items) {
+                                const nameEl = li.querySelector('.page-head__list-name');
+                                const valEl = li.querySelector('.page-head__list-val');
+                                if (!nameEl || !valEl) continue;
+                                const name = (nameEl.innerText || '').trim().toLowerCase();
+                                if (!name.includes('процентная ставка')) continue;
+                                const r = parseRate(valEl.innerText || '');
+                                if (r && !results.includes(r)) {
+                                    results.push(r);
+                                    break;
+                                }
+                            }
+                        }
+
+                        return results.length ? results.join(' / ') : null;
+                    }
+                """)
+                print(f"[DEBUG] belapb_rates = {value}")
                 await browser.close()
                 return value if value else None
 

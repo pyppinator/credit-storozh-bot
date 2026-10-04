@@ -4,6 +4,7 @@ from banks.mtbank import MTBANK
 from banks.priorbank import PRIORBANK
 from banks.alfabank import ALFABANK
 from banks.belgazprombank import BELGAZPROMBANK
+from banks.belagroprombank import BELAGROPROMBANK
 
 BANKS = {
     "tb": TECHNOBANK,
@@ -12,4 +13,5 @@ BANKS = {
     "priorbank": PRIORBANK,
     "alfabank": ALFABANK,
     "belgazprombank": BELGAZPROMBANK,
+    "belagroprombank": BELAGROPROMBANK,
 }
