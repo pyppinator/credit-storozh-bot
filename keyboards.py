@@ -96,11 +96,52 @@ def refinance_menu():
 def admin_menu():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика и подписки", callback_data="admin_subs")],
+        [InlineKeyboardButton(text="🔍 Проверить ставку", callback_data="admin_check")],
         [InlineKeyboardButton(text="🔄 Запустить обход на GitHub", callback_data="admin_update_rates")],
         [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="admin_restart")],
         [InlineKeyboardButton(text="❌ Отписаться от ВСЕХ", callback_data="admin_unsub_all")],
         [InlineKeyboardButton(text="🏠 В главное меню", callback_data="back_main")],
     ])
+
+def admin_check_banks_menu():
+    """Меню выбора банка для проверки"""
+    buttons = []
+    for bank_id, bank_data in BANKS.items():
+        buttons.append([InlineKeyboardButton(text=f"🏦 {bank_data['name']}", callback_data=f"check_{bank_id}")])
+    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_panel")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def admin_check_products_menu(bank_id):
+    """Меню выбора продукта для проверки"""
+    bank = BANKS.get(bank_id)
+    if not bank:
+        return None
+    buttons = []
+    
+    if "categories" in bank:
+        for cat_id, cat_data in bank["categories"].items():
+            for group_id, group_data in cat_data["groups"].items():
+                for prod_id, prod_data in group_data["products"].items():
+                    buttons.append([InlineKeyboardButton(
+                        text=f"🔍 {prod_data['name']}",
+                        callback_data=f"checkp_{bank_id}_{cat_id}_{group_id}_{prod_id}"
+                    )])
+    elif "groups" in bank:
+        for group_id, group_data in bank["groups"].items():
+            for prod_id, prod_data in group_data["products"].items():
+                buttons.append([InlineKeyboardButton(
+                    text=f"🔍 {prod_data['name']}",
+                    callback_data=f"checkp_{bank_id}_{group_id}_{prod_id}"
+                )])
+    elif "products" in bank:
+        for prod_id, prod_data in bank["products"].items():
+            buttons.append([InlineKeyboardButton(
+                text=f"🔍 {prod_data['name']}",
+                callback_data=f"checkp_{bank_id}_{prod_id}"
+            )])
+    
+    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_check")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def top_products_menu():
     return InlineKeyboardMarkup(inline_keyboard=[

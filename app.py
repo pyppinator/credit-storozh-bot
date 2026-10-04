@@ -11,7 +11,8 @@ from aiohttp import web
 from keyboards import (
     main_menu, banks_menu, bank_menu, category_menu, group_menu,
     subscriptions_menu, unsubscribe_menu, refinance_menu,
-    admin_menu, top_products_menu
+    admin_menu, top_products_menu,
+    admin_check_banks_menu, admin_check_products_menu
 )
 from database import (
     init_db, add_subscription, get_user_subscriptions,
@@ -21,6 +22,7 @@ from database import (
 )
 from products import BANKS
 from products_map import PRODUCTS_MAP
+from scraper import get_rate_from_site
 
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 ADMIN_ID = 232443634
@@ -322,6 +324,8 @@ async def top_products_handler(callback: CallbackQuery):
 
     await callback.message.edit_text(text, reply_markup=top_products_menu(), parse_mode="HTML")
 
+# ============ АДМИН-ПАНЕЛЬ ============
+
 @dp.callback_query(F.data == "admin_panel")
 async def admin_panel(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
@@ -330,11 +334,108 @@ async def admin_panel(callback: CallbackQuery):
     last_update = get_last_update_time() or "никогда"
     await callback.message.edit_text(
         f"🔐 <b>Админ-панель</b>\n\n"
-        f"🕐 Последнее обновление ставок: <b>{last_update[:16].replace('T', ' ') if last_update != 'никогда' else 'никогда'}</b>\n\n"
-        f"Обход ставок запускается <b>автоматически</b> на GitHub Actions:\n"
-        f"• в 3:00 — обновление БД\n"
-        f"• в 10:00 — рассылка уведомлений\n\n"
-        f"Чтобы запустить вручную — нажми «🔄 Запустить обход на GitHub».",
+        f"🕐 Последнее обновление ставок: <b>{last_update[:16].replace('T', ' ') if last_update != 'никогда' else 'никогда'}</b>",
+        reply_markup=admin_menu(),
+        parse_mode="HTML"
+    )
+
+@dp.callback_query(F.data == "admin_check")
+async def admin_check(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "🔍 <b>Проверка ставки</b>\n\nВыбери банк:",
+        reply_markup=admin_check_banks_menu(),
+        parse_mode="HTML"
+    )
+
+@dp.callback_query(F.data.startswith("check_"))
+async def admin_check_bank(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+    bank_id = callback.data.replace("check_", "")
+    bank = BANKS.get(bank_id)
+    if not bank:
+        await callback.answer("Банк не найден")
+        return
+    await callback.message.edit_text(
+        f"🔍 <b>Проверка ставки — {bank['name']}</b>\n\nВыбери кредит:",
+        reply_markup=admin_check_products_menu(bank_id),
+        parse_mode="HTML"
+    )
+
+@dp.callback_query(F.data.startswith("checkp_"))
+async def admin_check_product(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔ Нет доступа", show_alert=True)
+        return
+
+    parts = callback.data.split("_")
+    bank_id = parts[1]
+    bank = BANKS.get(bank_id)
+    if not bank:
+        await callback.answer("Банк не найден")
+        return
+
+    product = None
+    if "categories" in bank:
+        for cat_id, cat_data in bank["categories"].items():
+            for group_id, group_data in cat_data["groups"].items():
+                prefix = f"checkp_{bank_id}_{cat_id}_{group_id}_"
+                if callback.data.startswith(prefix):
+                    prod_id = callback.data[len(prefix):]
+                    product = group_data["products"].get(prod_id)
+                    if product:
+                        break
+            if product:
+                break
+    if not product and "groups" in bank:
+        for group_id, group_data in bank["groups"].items():
+            prefix = f"checkp_{bank_id}_{group_id}_"
+            if callback.data.startswith(prefix):
+                prod_id = callback.data[len(prefix):]
+                product = group_data["products"].get(prod_id)
+                if product:
+                    break
+    if not product and "products" in bank:
+        prefix = f"checkp_{bank_id}_"
+        if callback.data.startswith(prefix):
+            prod_id = callback.data[len(prefix):]
+            product = bank["products"].get(prod_id)
+
+    if not product:
+        await callback.answer("Кредит не найден")
+        return
+
+    await callback.message.edit_text(
+        f"⏳ <b>Проверяю ставку...</b>\n\n"
+        f"Банк: {bank['name']}\n"
+        f"Кредит: «{product['name']}»",
+        parse_mode="HTML"
+    )
+
+    # Запускаем scraper ТОЛЬКО для этого продукта
+    rate = await get_rate_from_site(product["url"], product["selector"], product.get("action"))
+    if not rate:
+        rate = "не удалось получить"
+
+    old_rate = get_rate_from_db(bank["name"], product["name"]) or "нет в БД"
+
+    # Определяем, совпадает ли
+    if rate == old_rate:
+        status = "✅ Совпадает"
+    else:
+        status = "⚠️ НЕ СОВПАДАЕТ"
+
+    await callback.message.edit_text(
+        f"🔍 <b>Результат проверки</b>\n\n"
+        f"Банк: {bank['name']}\n"
+        f"Кредит: «{product['name']}»\n\n"
+        f"📡 Ставка с сайта: <b>{rate}</b>\n"
+        f"💾 Ставка в БД: <b>{old_rate}</b>\n\n"
+        f"{status}",
         reply_markup=admin_menu(),
         parse_mode="HTML"
     )
@@ -425,6 +526,8 @@ async def admin_subs_callback(callback: CallbackQuery):
             await callback.message.answer(part, parse_mode="HTML")
     else:
         await callback.message.edit_text(text, reply_markup=main_menu(is_admin=True), parse_mode="HTML")
+
+# ============ ЗАЯВКИ ============
 
 @dp.message()
 async def handle_request(message: Message):
