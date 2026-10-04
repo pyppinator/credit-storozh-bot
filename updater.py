@@ -21,10 +21,10 @@ async def update_all_rates():
     updated = 0
     changed = 0
 
-    for (bank, product), (url, selector, action) in PRODUCTS_MAP.items():
+    for (bank, product), (url, selector, action, column_index) in PRODUCTS_MAP.items():
         try:
             print(f"[{updated+1}/{len(PRODUCTS_MAP)}] {bank} — {product}")
-            new_rate = await get_rate_from_site(url, selector, action)
+            new_rate = await get_rate_from_site(url, selector, action, column_index)
 
             if not new_rate:
                 print(f"  ✗ Не удалось получить")
@@ -36,11 +36,9 @@ async def update_all_rates():
             print(f"  Стало: {new_rate}")
 
             if old_rate != new_rate:
-                # Обновляем БД
                 update_rate_in_db(bank, product, new_rate)
                 update_rate_for_all(bank, product, new_rate)
 
-                # Складываем уведомления в pending_changes
                 subscribers = get_subscribers(bank, product)
                 for user_id in subscribers:
                     add_pending_change(user_id, bank, product, old_rate, new_rate)

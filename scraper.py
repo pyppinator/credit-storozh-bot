@@ -77,7 +77,7 @@ async def block_resources(route):
 
 # ============ ПОЛУЧЕНИЕ СТАВКИ ============
 
-async def get_rate_from_site(url, selector, action=None):
+async def get_rate_from_site(url, selector, action=None, column_index=None):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
@@ -216,7 +216,6 @@ async def get_rate_from_site(url, selector, action=None):
             if selector == "alfabank_fixed_rate":
                 value = await page.evaluate("""
                     () => {
-                        // 1. Ищем .page-top-section__bottom-item, где есть заголовок "Фиксированная ставка" или "Процентная ставка"
                         const items = document.querySelectorAll('.page-top-section__bottom-item');
                         for (const item of items) {
                             const titleEl = item.querySelector('.item-title');
@@ -230,7 +229,6 @@ async def get_rate_from_site(url, selector, action=None):
                             }
                         }
 
-                        // 2. Fallback — берём первое .text с "%"
                         const all = document.querySelectorAll('.page-top-section__bottom-item .text');
                         for (const el of all) {
                             const t = (el.innerText || '').trim();
@@ -242,6 +240,45 @@ async def get_rate_from_site(url, selector, action=None):
                     }
                 """)
                 print(f"[DEBUG] alfabank_fixed_rate = {value}")
+                await browser.close()
+                return value if value else None
+
+            # === Альфа-Банк: таблица с колонками (кредит на авто) ===
+            if selector == "alfabank_auto_table":
+                value = await page.evaluate(f"""
+                    () => {{
+                        const colIdx = {column_index if column_index is not None else 1};
+
+                        const tables = document.querySelectorAll('.info-section__table-wrapper table');
+                        for (const table of tables) {{
+                            const rows = table.querySelectorAll('tr');
+                            for (const row of rows) {{
+                                const cells = row.querySelectorAll('td');
+                                if (cells.length < 2) continue;
+                                const first = (cells[0].innerText || '').trim().toLowerCase();
+                                if (!first.includes('процентная ставка')) continue;
+
+                                if (colIdx >= cells.length) return null;
+                                const target = cells[colIdx];
+                                const text = (target.innerText || '').replace(/\\u00a0/g, ' ');
+
+                                // все X,XX% или X.XX%
+                                const matches = text.match(/(\\d{{1,2}}[.,]\\d{{1,2}})\\s*%/g);
+                                if (!matches) return null;
+
+                                const uniq = [];
+                                matches.forEach(mm => {{
+                                    const v = mm.replace(',', '.').replace(/\\s/g, '').trim();
+                                    if (!uniq.includes(v)) uniq.push(v);
+                                }});
+
+                                return uniq.length ? uniq.join(' / ') : null;
+                            }}
+                        }}
+                        return null;
+                    }}
+                """)
+                print(f"[DEBUG] alfabank_auto_table (col={column_index}) = {value}")
                 await browser.close()
                 return value if value else None
 

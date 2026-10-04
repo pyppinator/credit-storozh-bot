@@ -42,7 +42,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Временное хранилище для результатов проверки (bank, product, rate)
+# Временное хранилище для результатов проверки (bank, product, url, rate)
 _check_cache = {}
 
 def _make_key(bank_name, product_name):
@@ -424,7 +424,12 @@ async def admin_check_product(callback: CallbackQuery):
         parse_mode="HTML"
     )
 
-    rate = await get_rate_from_site(product["url"], product["selector"], product.get("action"))
+    rate = await get_rate_from_site(
+        product["url"],
+        product["selector"],
+        product.get("action"),
+        product.get("column_index")
+    )
     if not rate:
         rate = "не удалось получить"
 
@@ -435,23 +440,25 @@ async def admin_check_product(callback: CallbackQuery):
     else:
         status = "⚠️ НЕ СОВПАДАЕТ"
 
-    # Сохраняем во временный кэш
+    # Сохраняем во временный кэш (включая URL!)
     key = _make_key(bank["name"], product["name"])
     _check_cache[key] = {
         "bank": bank["name"],
         "product": product["name"],
+        "url": product["url"],
         "rate": rate
     }
 
     await callback.message.edit_text(
         f"🔍 <b>Результат проверки</b>\n\n"
         f"Банк: {bank['name']}\n"
-        f"Кредит: «{product['name']}»\n\n"
+        f"Кредит: <a href=\"{product['url']}\">{product['name']}</a>\n\n"
         f"📡 Ставка с сайта: <b>{rate}</b>\n"
         f"💾 Ставка в БД: <b>{old_rate}</b>\n\n"
         f"{status}",
         reply_markup=admin_check_result_menu(bank["name"], product["name"]),
-        parse_mode="HTML"
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
 @dp.callback_query(F.data.startswith("savetodb_"))
@@ -469,6 +476,7 @@ async def save_to_db(callback: CallbackQuery):
 
     bank_name = data["bank"]
     product_name = data["product"]
+    product_url = data.get("url", "")
     rate = data["rate"]
 
     # Сохраняем в БД
@@ -478,14 +486,17 @@ async def save_to_db(callback: CallbackQuery):
     # Удаляем из кэша
     del _check_cache[key]
 
+    product_link = f'<a href="{product_url}">{product_name}</a>' if product_url else f'«{product_name}»'
+
     await callback.message.edit_text(
         f"✅ <b>Сохранено в БД!</b>\n\n"
         f"Банк: {bank_name}\n"
-        f"Кредит: «{product_name}»\n"
+        f"Кредит: {product_link}\n"
         f"Новая ставка: <b>{rate}</b>\n\n"
         f"Теперь все подписчики увидят её.",
         reply_markup=admin_menu(),
-        parse_mode="HTML"
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
 @dp.callback_query(F.data == "admin_update_rates")
