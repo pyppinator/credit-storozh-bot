@@ -212,11 +212,16 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белгазпромбанк: 2 ставки через regex по тексту ===
+            # === Белгазпромбанк: ДЕБАЖ-2 ===
             if selector == "belgazprombank_rates":
                 value = await page.evaluate("""
                     () => {
-                        // 1. Находим <td> с заголовком "Размер процентов за пользование кредитом"
+                        const out = [];
+                        const push = (label, val) => {
+                            out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
+                        };
+
+                        // 1. Находим <td> с заголовком
                         const tds = document.querySelectorAll('td');
                         let targetTd = null;
                         for (const td of tds) {
@@ -226,71 +231,54 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                                 break;
                             }
                         }
-                        if (!targetTd) return null;
+                        push('target_found', !!targetTd);
+                        if (!targetTd) return out.join('\\n');
 
-                        // 2. Берём соседний <td> справа — там ставки и сроки
-                        const nextTd = targetTd.nextElementSibling;
-                        if (!nextTd) return null;
+                        push('target_tag', targetTd.tagName);
+                        push('target_innerText', (targetTd.innerText || '').slice(0, 200));
 
-                        // 3. innerHTML — чтобы <br> стали пробелами (нам нужно видеть весь текст слитно)
-                        let rawHtml = nextTd.innerHTML || '';
-                        rawHtml = rawHtml.replace(/<br\\s*\\/?>/gi, ' ');
-                        // Заменяем все теги на пробел, потом декодируем частые сущности
-                        let text = rawHtml.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
-                        text = text.replace(/\\s+/g, ' ').trim();
+                        // 2. nextElementSibling
+                        const next = targetTd.nextElementSibling;
+                        push('next_found', !!next);
+                        if (!next) return out.join('\\n');
 
-                        if (!text) return null;
+                        push('next_tag', next.tagName);
+                        push('next_class', next.className || '');
+                        push('next_innerText', (next.innerText || '').slice(0, 500));
+                        push('next_innerHTML', (next.innerHTML || '').slice(0, 500));
 
-                        const results = [];
+                        // 3. Все %-числа в next.innerText
+                        const text = (next.innerText || '').replace(/\\u00a0/g, ' ');
+                        const matches = text.match(/([\\d.,]+)\\s*%/g) || [];
+                        push('pct_in_next_text', JSON.stringify(matches));
 
-                        // 4. Первая ставка: "В течение первых 180 календарных дней – 0,000001% годовых"
-                        const firstM = text.match(/первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
-                        if (firstM) {
-                            const days = firstM[1];
-                            const val = firstM[2].replace(',', '.') + '%';
-                            results.push(val + ' (' + days + ' дн.)');
+                        // 4. Все %-числа в next.textContent
+                        const text2 = (next.textContent || '').replace(/\\u00a0/g, ' ');
+                        const matches2 = text2.match(/([\\d.,]+)\\s*%/g) || [];
+                        push('pct_in_next_textContent', JSON.stringify(matches2));
+
+                        // 5. Родитель <tr> — вдруг ставки лежат в следующей строке?
+                        const tr = targetTd.closest('tr');
+                        push('tr_found', !!tr);
+                        if (tr) {
+                            const trText = (tr.innerText || '').replace(/\\u00a0/g, ' ');
+                            push('tr_text_slice', trText.slice(0, 500));
+                            const trPct = trText.match(/([\\d.,]+)\\s*%/g) || [];
+                            push('pct_in_tr', JSON.stringify(trPct));
                         }
 
-                        // 5. Вторая ставка: "Начиная с 181 календарного дня – 12,8% годовых"
-                        const secondM = text.match(/(?:начиная\\s+)?с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
-                        if (secondM) {
-                            const val = secondM[2].replace(',', '.') + '%';
-                            results.push(val + ' (далее)');
+                        // 6. Ищем в body фразу про "Начиная с"
+                        const bodyText = (document.body.innerText || '').replace(/\\u00a0/g, ' ');
+                        const idx = bodyText.toLowerCase().indexOf('начиная');
+                        push('body_idx_nachinaya', idx);
+                        if (idx >= 0) {
+                            push('body_slice', bodyText.slice(idx - 50, idx + 200));
                         }
 
-                        // 6. Если одна из них не нашлась через фразу — fallback:
-                        //    берём все X% в порядке появления, первую как "180 дн.", вторую как "далее"
-                        if (results.length < 2) {
-                            const matches = text.match(/([\\d.,]+)\\s*%/g) || [];
-                            const uniq = [];
-                            matches.forEach(m => {
-                                const v = m.replace(',', '.').replace(/\\s/g, '').trim();
-                                if (!uniq.includes(v)) uniq.push(v);
-                            });
-
-                            if (results.length === 0) {
-                                if (uniq.length >= 2) {
-                                    results.push(uniq[0] + ' (180 дн.)');
-                                    results.push(uniq[1] + ' (далее)');
-                                } else if (uniq.length === 1) {
-                                    results.push(uniq[0] + ' (далее)');
-                                }
-                            } else if (results.length === 1) {
-                                // одну нашли — добавляем вторую из uniq
-                                const firstVal = results[0].split(' ')[0]; // "0.000001%"
-                                for (const v of uniq) {
-                                    if (v !== firstVal) {
-                                        results.push(v + ' (далее)');
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        return results.length ? results.join(' / ') : null;
+                        return out.join('\\n');
                     }
                 """)
-                print(f"[DEBUG] belgazprombank_rates = {value}")
+                print(f"[DEBUG] belgazprombank_rates:\n{value}")
                 await browser.close()
                 return value if value else None
 
