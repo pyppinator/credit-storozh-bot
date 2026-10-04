@@ -149,69 +149,62 @@ async def get_rate_from_site(url, selector, action=None):
                 await browser.close()
                 return value if value else None
 
-            # === Приорбанк: недвижимость — берём строго 2 ставки: баннер + тултип ===
+            # === Приорбанк: недвижимость — ДЕБАЖ (временно) ===
             if selector == "priorbank_banner_bold":
                 value = await page.evaluate("""
                     () => {
-                        const parseRate = (s) => {
-                            if (!s) return null;
-                            const m = s.match(/(\\d{1,2}[.,]\\d{1,2})\\s*%/);
-                            if (!m) return null;
-                            return m[1].replace(',', '.') + '%';
+                        const out = [];
+                        const push = (label, val) => {
+                            out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
                         };
 
-                        let first = null;   // ставка из баннера
-                        let second = null;  // ставка из тултипа или условий
+                        // A. Все .banner-content_big-bold на странице
+                        const bolds = document.querySelectorAll('.banner-content_big-bold');
+                        push('bolds_count', bolds.length);
+                        bolds.forEach((el, i) => push('bold_' + i, el.innerText.trim()));
 
-                        // 1. СТАВКА №1: .banner-content__title .banner-content_big-bold
-                        const titleEl = document.querySelector('.banner-content__title .banner-content_big-bold');
-                        if (titleEl) first = parseRate(titleEl.innerText);
+                        // B. .banner-content__title
+                        const title = document.querySelector('.banner-content__title');
+                        push('title_text', title ? title.innerText.trim() : null);
 
-                        // 2. СТАВКА №2 (приоритет — тултип внутри баннера):
-                        //    ищем <u> внутри .banner-content__descr, у которого или родителя есть data-tooltip-text
-                        const descrU = document.querySelector('.banner-content__descr u');
-                        if (descrU) {
-                            // тултип может быть на самом <u> или на его обёртке
-                            let tipText = descrU.getAttribute('data-tooltip-text');
-                            if (!tipText) {
-                                const span = descrU.closest('[data-tooltip-text]');
-                                if (span) tipText = span.getAttribute('data-tooltip-text');
-                            }
-                            if (!tipText) {
-                                const parent = descrU.parentElement;
-                                if (parent) tipText = parent.getAttribute('data-tooltip-text');
-                            }
-                            if (tipText) second = parseRate(tipText);
+                        // C. .banner-content__descr
+                        const descr = document.querySelector('.banner-content__descr');
+                        push('descr_text', descr ? descr.innerText.trim() : null);
+
+                        // D. Тултип на <u> в descr
+                        const u = document.querySelector('.banner-content__descr u');
+                        if (u) {
+                            push('u_text', u.innerText.trim());
+                            push('u_tooltip', u.getAttribute('data-tooltip-text'));
+                            const p = u.parentElement;
+                            push('u_parent_tooltip', p ? p.getAttribute('data-tooltip-text') : null);
+                        } else {
+                            push('u_text', null);
                         }
 
-                        // 3. Если тултип не нашёлся — берём вторую ставку из блока «Условия кредита»
-                        if (!second) {
-                            const nodes = document.querySelectorAll('p, div, span');
-                            const candidates = [];
-                            nodes.forEach(el => {
-                                if (el.children.length > 0) return;
-                                const t = (el.innerText || '').trim();
-                                const m = t.match(/^(\\d{1,2}[.,]\\d{1,2})\\s*%\\s*годовых$/i);
-                                if (m) {
-                                    const num = parseFloat(m[1].replace(',', '.'));
-                                    if (num >= 5 && num <= 40) {
-                                        candidates.push(m[1].replace(',', '.') + '%');
-                                    }
-                                }
-                            });
-                            // второй кандидат — это ставка "далее"
-                            if (candidates.length >= 2) second = candidates[1];
-                        }
+                        // E. Все элементы с data-tooltip-text
+                        const tips = document.querySelectorAll('[data-tooltip-text]');
+                        push('tooltips_count', tips.length);
+                        tips.forEach((el, i) => push('tip_' + i, el.getAttribute('data-tooltip-text')));
 
-                        // 4. Собираем результат: сначала первая, потом вторая (если есть и не дубликат)
-                        const result = [];
-                        if (first) result.push(first);
-                        if (second && second !== first) result.push(second);
+                        // F. Текст рядом со словами "первые", "далее"
+                        const all = document.querySelectorAll('p, div, span, li');
+                        const around = [];
+                        all.forEach(el => {
+                            if (el.children.length > 0) return;
+                            const t = (el.innerText || '').trim();
+                            if (!t) return;
+                            if (/первые|далее|первых/i.test(t) || /годовых/i.test(t)) {
+                                if (t.length < 120) around.push(t);
+                            }
+                        });
+                        push('around_count', around.length);
+                        around.slice(0, 10).forEach((t, i) => push('around_' + i, t));
 
-                        return result.length ? result.join(' / ') : null;
+                        return out.join('\\n');
                     }
                 """)
-                print(f"[DEBUG] priorbank_banner_bold = {value}")
+                print(f"[DEBUG] priorbank_banner_bold:\n{value}")
                 await browser.close()
                 return value if value else None
 
