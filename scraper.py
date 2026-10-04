@@ -212,89 +212,65 @@ async def get_rate_from_site(url, selector, action=None, column_index=None):
                 await browser.close()
                 return value if value else None
 
-            # === Белгазпромбанк: ищем ПРАВИЛЬНЫЙ <td> — короткий заголовок + есть сосед ===
+            # === Белгазпромбанк: ДЕБАЖ-3 — показываем ВСЕХ кандидатов ===
             if selector == "belgazprombank_rates":
                 value = await page.evaluate("""
                     () => {
-                        // 1. Собираем ВСЕ <td>, где текст содержит "размер процентов" И "и порядок их уплаты"
-                        //    (это отсекает длинный текст про пеню, где "проценты за пользование кредитом" упомянуты вскользь)
-                        const tds = document.querySelectorAll('td');
-                        const candidates = [];
+                        const out = [];
+                        const push = (label, val) => {
+                            out.push(label + '=' + (val === null || val === undefined ? 'NULL' : JSON.stringify(val)));
+                        };
 
+                        // Собираем ВСЕ <td>, где текст содержит "размер процентов"
+                        const tds = document.querySelectorAll('td');
+                        const hits = [];
+                        let idx = 0;
                         for (const td of tds) {
                             const t = (td.innerText || '').replace(/\\u00a0/g, ' ').trim();
-
-                            // заголовок должен быть КОРОТКИМ и содержать "размер процентов" + "порядок"
-                            if (t.length > 150) continue;
                             if (!/размер\\s+процентов/i.test(t)) continue;
-                            if (!/порядок/i.test(t)) continue;
 
-                            // обязательно должен быть сосед справа
                             const next = td.nextElementSibling;
-                            if (!next) continue;
+                            const nextText = next ? (next.innerText || '').replace(/\\u00a0/g, ' ').slice(0, 300) : null;
+                            const hasNext = !!next;
+                            const hasPercent = nextText ? /%/.test(nextText) : false;
 
-                            // сосед должен содержать хотя бы один %
-                            const nextText = (next.innerText || '').replace(/\\u00a0/g, ' ');
-                            if (!/%/.test(nextText)) continue;
-
-                            candidates.push({ td: td, next: next, headerText: t, nextText: nextText });
-                        }
-
-                        if (candidates.length === 0) return null;
-
-                        // 2. Берём первого валидного кандидата
-                        const c = candidates[0];
-                        const text = c.nextText.replace(/\\s+/g, ' ');
-
-                        const results = [];
-
-                        // 3. Первая ставка: "В течение первых 180 календарных дней – 0,000001% годовых"
-                        const firstM = text.match(/первых\\s+(\\d{1,4})\\s+календарных\\s+дней?\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
-                        if (firstM) {
-                            const days = firstM[1];
-                            const val = firstM[2].replace(',', '.') + '%';
-                            results.push(val + ' (' + days + ' дн.)');
-                        }
-
-                        // 4. Вторая ставка: "Начиная с 181 календарного дня – 12,8% годовых"
-                        const secondM = text.match(/(?:начиная\\s+)?с\\s+(\\d{1,4})\\s+календарного\\s+дня\\s*[–\\-]\\s*([\\d.,]+)\\s*%/i);
-                        if (secondM) {
-                            const val = secondM[2].replace(',', '.') + '%';
-                            results.push(val + ' (далее)');
-                        }
-
-                        // 5. Fallback — если одна из ставок не нашлась через фразу,
-                        //    добираем из всех X% в тексте
-                        if (results.length < 2) {
-                            const matches = text.match(/([\\d.,]+)\\s*%/g) || [];
-                            const uniq = [];
-                            matches.forEach(m => {
-                                const v = m.replace(',', '.').replace(/\\s/g, '').trim();
-                                if (!uniq.includes(v)) uniq.push(v);
+                            hits.push({
+                                n: idx,
+                                len: t.length,
+                                text: t.slice(0, 120),
+                                hasNext: hasNext,
+                                hasPercent: hasPercent,
+                                nextText: nextText
                             });
+                            idx++;
+                        }
 
-                            if (results.length === 0) {
-                                if (uniq.length >= 2) {
-                                    results.push(uniq[0] + ' (180 дн.)');
-                                    results.push(uniq[1] + ' (далее)');
-                                } else if (uniq.length === 1) {
-                                    results.push(uniq[0] + ' (далее)');
-                                }
-                            } else if (results.length === 1) {
-                                const firstVal = results[0].split(' ')[0]; // "0.000001%"
-                                for (const v of uniq) {
-                                    if (v !== firstVal) {
-                                        results.push(v + ' (далее)');
-                                        break;
-                                    }
-                                }
+                        push('total_hits', hits.length);
+                        hits.forEach(h => {
+                            push('hit_' + h.n + '_len', h.len);
+                            push('hit_' + h.n + '_text', h.text);
+                            push('hit_' + h.n + '_hasNext', h.hasNext);
+                            push('hit_' + h.n + '_hasPercent', h.hasPercent);
+                            push('hit_' + h.n + '_nextText', h.nextText);
+                        });
+
+                        // Дополнительно: ищем "Размер процентов за пользование кредитом и порядок" в любой ноде
+                        const all = document.querySelectorAll('*');
+                        const exactHits = [];
+                        for (const el of all) {
+                            if (el.children.length > 0) continue;
+                            const t = (el.innerText || '').trim();
+                            if (t.length < 120 && /размер\\s+процентов/i.test(t) && /порядок/i.test(t)) {
+                                exactHits.push({ tag: el.tagName, cls: el.className || '', text: t, parentTag: el.parentElement ? el.parentElement.tagName : '' });
                             }
                         }
+                        push('exact_hits_count', exactHits.length);
+                        exactHits.forEach((h, i) => push('exact_' + i, h.tag + ' | ' + h.cls + ' | parent=' + h.parentTag + ' | ' + h.text));
 
-                        return results.length ? results.join(' / ') : null;
+                        return out.join('\\n');
                     }
                 """)
-                print(f"[DEBUG] belgazprombank_rates = {value}")
+                print(f"[DEBUG] belgazprombank_rates:\n{value}")
                 await browser.close()
                 return value if value else None
 
